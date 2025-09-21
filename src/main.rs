@@ -145,7 +145,7 @@ async fn run_direct_mode(cli: &Cli, _include: &[String], _exclude: &[String]) ->
 
 fn generate_output(tree: &directory::tree::DirectoryTree, cli: &Cli) -> Result<()> {
     let formatter = OutputFormatter::new()
-        .with_metadata(true)
+        .with_metadata(false)
         .with_line_numbers(false);
 
     let writer = OutputWriter::new().with_formatter(formatter);

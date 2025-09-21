@@ -36,9 +36,11 @@ impl OutputFormatter {
         let included_files = tree.get_all_included_files();
         let mut output = String::new();
 
-        // Add header
-        output.push_str(&self.format_header(tree, &included_files)?);
-        output.push_str("\n\n");
+        if self.include_metadata {
+            // Add header
+            output.push_str(&self.format_header(tree, &included_files)?);
+            output.push_str("\n\n");
+        }
 
         // Add file contents
         for (index, file_node) in included_files.iter().enumerate() {
@@ -87,7 +89,7 @@ impl OutputFormatter {
 
         let mut output = String::new();
 
-        // File header
+        // Always include file header for context
         output.push_str(&format!("## {}\n\n", relative_path.display()));
 
         if self.include_metadata {
