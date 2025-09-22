@@ -181,3 +181,5 @@ anyhow = "1.0"
 - Robust error handling
 - Comprehensive documentation
 
+# BUG fixes required
+- [ ] Fix the bug when cursor scrolls of the view
