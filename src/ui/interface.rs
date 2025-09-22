@@ -80,7 +80,7 @@ fn draw_file_list(f: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("📁 Files and Directories (► = cursor, Enter = toggle ✓/✗)")
+                .title("Files and Directories (Enter = toggle ✓/✗)")
                 .border_style(app.color_scheme.border),
         )
         .style(app.color_scheme.background);
@@ -104,20 +104,13 @@ fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem
             "📄"
         };
 
-        let cursor_indicator = if is_selected { "► " } else { "  " };
+        let cursor_indicator = if is_selected { "▶ " } else { "  " };
 
         // Get base style for the state, not influenced by selection
         let base_style = app.color_scheme.get_state_style(node.state);
 
-        // Only the cursor indicator gets the selected style
-        let cursor_style = if is_selected {
-            app.color_scheme.selected
-        } else {
-            base_style
-        };
-
         let spans = vec![
-            Span::styled(cursor_indicator, cursor_style),
+            Span::styled(cursor_indicator, app.color_scheme.text),
             Span::styled(format!("{} ", state_indicator), base_style),
             Span::styled(format!("{} ", file_type_indicator), app.color_scheme.text),
             Span::styled(display_path, base_style),
