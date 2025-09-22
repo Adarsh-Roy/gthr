@@ -11,7 +11,9 @@
       "Bash(./target/release/ctx:*)",
       "Bash(timeout:*)",
       "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo:*)"
     ],
     "deny": [],
     "ask": []

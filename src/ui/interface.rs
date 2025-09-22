@@ -20,6 +20,9 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
 }
 
 fn draw_main_interface(f: &mut Frame, app: &App, area: Rect) {
+    // Clear the background for transparency
+    f.render_widget(Clear, area);
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -103,13 +106,21 @@ fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem
 
         let cursor_indicator = if is_selected { "► " } else { "  " };
 
-        let style = app.color_scheme.get_item_style(node.state, is_selected);
+        // Get base style for the state, not influenced by selection
+        let base_style = app.color_scheme.get_state_style(node.state);
+
+        // Only the cursor indicator gets the selected style
+        let cursor_style = if is_selected {
+            app.color_scheme.selected
+        } else {
+            base_style
+        };
 
         let spans = vec![
-            Span::styled(cursor_indicator, style),
-            Span::styled(format!("{} ", state_indicator), style),
+            Span::styled(cursor_indicator, cursor_style),
+            Span::styled(format!("{} ", state_indicator), base_style),
             Span::styled(format!("{} ", file_type_indicator), app.color_scheme.text),
-            Span::styled(display_path, style),
+            Span::styled(display_path, base_style),
         ];
 
         if let Some(size) = node.size {
@@ -149,15 +160,15 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let remaining_width = available_width.saturating_sub(left_text_len);
 
     let right_text = if remaining_width > 80 {
-        "Arrows: Navigate | Enter: Toggle ✓/✗ | Ctrl+O: Generate | Ctrl+H: Help"
+        "↑/↓: Move | Enter: Toggle ✓/✗ | Ctrl+E: Export | Ctrl+H: Help"
     } else if remaining_width > 60 {
-        "Arrows: Navigate | Enter: Toggle | Ctrl+O: Generate | Ctrl+H: Help"
+        "↑/↓: Move | Enter: Toggle | Ctrl+E: Export | Ctrl+H: Help"
     } else if remaining_width > 40 {
-        "Arrows: Navigate | Ctrl+O: Generate | Ctrl+H: Help"
+        "↑/↓: Move | Ctrl+E: Export | Ctrl+H: Help"
     } else if remaining_width > 25 {
-        "Arrows: Navigate | Ctrl+O: Generate"
+        "↑/↓: Move | Ctrl+E: Export"
     } else {
-        "Ctrl+O: Generate"
+        "Ctrl+E: Export"
     };
 
     let status_chunks = Layout::default()
@@ -207,7 +218,7 @@ fn draw_help_interface(f: &mut Frame, app: &App, area: Rect) {
         Line::from("  Enter      Toggle ✓ included / ✗ excluded"),
         Line::from(""),
         Line::from("Actions:"),
-        Line::from("  Ctrl+O     Generate output and quit"),
+        Line::from("  Ctrl+E     Export output and quit"),
         Line::from("  Ctrl+H     Show this help"),
         Line::from("  Esc        Clear search (or quit if search empty)"),
         Line::from(""),

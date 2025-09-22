@@ -98,7 +98,7 @@ async fn run_app<B: Backend>(
                     if let Some(action) = handle_key_event(key_event) {
                         match action {
                             AppAction::Escape => app.handle_escape(),
-                            AppAction::Generate => {
+                            AppAction::Export => {
                                 generate_output(&app.tree, cli)?;
                                 app.quit();
                             }

@@ -155,6 +155,13 @@ tokio = { version = "1.0", features = ["full"] }
 anyhow = "1.0"
 ```
 
+## Development Guidelines
+- **Build and Test Requirement**: Every time a change is made to the codebase, the application must be built and tested to ensure functionality is preserved.
+  - Run `cargo build` to compile the changes
+  - Run `cargo run -- [test-directory]` to test the application
+  - Verify that all existing functionality works as expected
+  - Only commit changes after successful build and test
+
 ## User Experience Flow
 1. User runs CLI with target directory
 2. Tool scans directory structure

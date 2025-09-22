@@ -38,8 +38,10 @@ pub fn handle_key_event(key_event: KeyEvent) -> Option<AppAction> {
     // Check for Ctrl combinations first
     if key_event.modifiers.contains(KeyModifiers::CONTROL) {
         match key_event.code {
-            KeyCode::Char('o') => return Some(AppAction::Generate),  // Ctrl+O for generate output
+            KeyCode::Char('e') => return Some(AppAction::Export),  // Ctrl+E for export output
             KeyCode::Char('h') => return Some(AppAction::ShowHelp),  // Ctrl+H for help
+            KeyCode::Char('j') => return Some(AppAction::MoveDown),  // Ctrl+J for moving down
+            KeyCode::Char('k') => return Some(AppAction::MoveUp),  // Ctrl+K for moving up
             _ => return None,  // Ignore other Ctrl combinations
         }
     }
@@ -77,7 +79,7 @@ pub enum AppAction {
     PageDown,
     MoveToTop,
     MoveToBottom,
-    Generate,
+    Export,
     ShowHelp,
     SearchChar(char),
     SearchBackspace,

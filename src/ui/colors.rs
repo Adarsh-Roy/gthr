@@ -21,7 +21,7 @@ impl Default for ColorScheme {
             partial: Style::default().fg(Color::Yellow),
             selected: Style::default().bg(Color::Blue).fg(Color::White),
             search_match: Style::default().fg(Color::Cyan),
-            background: Style::default().bg(Color::Black),
+            background: Style::default(), // Remove solid black background for transparency
             border: Style::default().fg(Color::White),
             text: Style::default().fg(Color::White),
             help_text: Style::default().fg(Color::Gray),
