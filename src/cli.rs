@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "ctx")]
+#[command(name = "gathr")]
 #[command(about = "A CLI tool for directory text ingestion with fuzzy finder capabilities")]
 #[command(version = "0.1.0")]
 pub struct Cli {
