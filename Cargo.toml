@@ -1,10 +1,16 @@
 [package]
-name = "text-ingest-cli"
+name = "gthr"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "A CLI tool for directory text ingestion with fuzzy finder capabilities"
+authors = ["Adarsh Roy <adarshroy.formal@gmail.com>"]
+description = "A modern CLI tool for interactive directory text ingestion with fuzzy finder"
 license = "MIT"
+repository = "https://github.com/Adarsh-Roy/gthr"
+homepage = "https://github.com/yourusername/gthr"
+documentation = "https://docs.rs/gthr"
+readme = "README.md"
+keywords = ["cli", "text", "ingest", "fuzzy", "llm", "context"]
+categories = ["command-line-utilities", "text-processing"]
 
 [[bin]]
 name = "gthr"
