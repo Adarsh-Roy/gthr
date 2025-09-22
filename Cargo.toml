@@ -7,7 +7,7 @@ description = "A CLI tool for directory text ingestion with fuzzy finder capabil
 license = "MIT"
 
 [[bin]]
-name = "gathr"
+name = "gthr"
 path = "src/main.rs"
 
 [dependencies]

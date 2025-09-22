@@ -12,7 +12,7 @@ A powerful CLI tool for directory text ingestion, similar to gitingest web app, 
   - 🟡 Yellow: Partially included (mixed children states)
 - **Multiple Modes**: Pre-include everything or start with everything excluded
 - **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Respect .gitignore files, custom file size limits
+- **Configurable**: Max file size limit (default 1 MB)
 - **Smart Output**: Markdown output with syntax highlighting, automatically copies to clipboard
 - **Vim-like Controls**: Vim-like navigation support (Ctrl+J/K) alongside arrow keys
 
@@ -26,7 +26,7 @@ cd text-ingest-cli
 cargo build --release
 ```
 
-The binary will be available at `target/release/gathr`.
+The binary will be available at `target/release/gthr`.
 
 ## Usage
 
@@ -34,36 +34,36 @@ The binary will be available at `target/release/gathr`.
 
 ```bash
 # Start interactive mode in current directory
-gathr
+gthr
 
 # Start with all files pre-included
-gathr --include-all
+gthr --include-all
 
 # Start with all files excluded (pick what to include, ths is the default)
-gathr --exclude-all
+gthr --exclude-all
 
 # Specify a different root directory
-gathr -r /path/to/directory
+gthr -r /path/to/directory
 
 # Save output to a file (it copies to clipboard regardless)
-gathr -o output.md
+gthr -o output.md
 ```
 
 ### Non-Interactive Mode
 
 ```bash
 # Generate output immediately with current settings
-gathr --non-interactive --include-all -o output.md
+gthr --non-interactive --include-all -o output.md
 
 # Process specific directory
-gathr --non-interactive --include-all -r /path/to/project -o project_ingest.md
+gthr --non-interactive --include-all -r /path/to/project -o project_ingest.md
 ```
 
 ### Direct Mode (WIP)
 
 ```bash
 # Use include/exclude patterns (TODO: Not yet implemented)
-gathr direct --include "*.rs" --exclude "target/*"
+gthr direct --include "*.rs" --exclude "target/*"
 ```
 
 ## Interactive Controls
@@ -104,7 +104,6 @@ Options:
   -e, --exclude-all                    Pre-exclude all files and directories
   -o, --output <OUTPUT>                Output file path
       --non-interactive                Skip interactive mode and use current selection
-      --respect-gitignore              Respect .gitignore files [default: true]
       --max-file-size <MAX_FILE_SIZE>  Maximum file size to include (in bytes) [default: 1048576]
 ```
 
@@ -112,13 +111,10 @@ Options:
 
 ```bash
 # Exclude large files (limit to 512KB)
-gathr --max-file-size 524288
-
-# Ignore .gitignore rules
-gathr --respect-gitignore false
+gthr --max-file-size 524288
 
 # Quick non-interactive export
-gathr --non-interactive --include-all
+gthr --non-interactive --include-all
 ```
 
 
@@ -152,6 +148,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [ ] Configuration file support (.textingestrc)
 - [ ] Custom include/exclude patterns (glob support, regex support in the search area)
 - [ ] Multiple output formats (JSON, plain text)
+- [ ] Respect .gitignore
 - [ ] Preset configurations for different project types
 - [ ] Performance optimizations for huge directories
 ```
