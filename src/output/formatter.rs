@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::Path;
 use anyhow::Result;
 use crate::directory::tree::{DirectoryTree, FileNode};
 

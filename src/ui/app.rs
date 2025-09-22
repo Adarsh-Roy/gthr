@@ -2,7 +2,6 @@ use crate::directory::tree::DirectoryTree;
 use crate::directory::state::SelectionState;
 use crate::fuzzy::filter::{filter_tree_nodes, FilteredResults};
 use crate::ui::colors::ColorScheme;
-use anyhow::Result;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
