@@ -1,6 +1,6 @@
-# Text Ingest CLI
+# gthr
 
-A powerful CLI tool for directory text ingestion, similar to gitingest web app, with interactive fuzzy finder capabilities with the ability to interactively choose what to include or exclude using a modern terminal user interface.
+A CLI tool for directory text ingestion, similar to gitingest web app, with interactive fuzzy finder capabilities with the ability to interactively choose what to include or exclude using a modern terminal user interface.
 
 ## Features
 
