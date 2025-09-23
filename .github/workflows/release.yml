@@ -70,6 +70,8 @@ jobs:
         if: matrix.os != 'windows-latest'
         with:
           files: ${{ matrix.name }}.tar.gz
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -78,6 +80,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         with:
           files: ${{ matrix.name }}.zip
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -87,21 +91,66 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - name: Wait for release assets to be available
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+
+          echo "Waiting for all release assets to be available..."
+
+          # Required assets
+          ASSETS=(
+            "gthr-aarch64-apple-darwin.tar.gz"
+            "gthr-x86_64-apple-darwin.tar.gz"
+            "gthr-x86_64-unknown-linux-gnu.tar.gz"
+          )
+
+          # Wait up to 10 minutes for all assets
+          for i in {1..60}; do
+            echo "Attempt $i/60: Checking for assets..."
+            all_found=true
+
+            for asset in "${ASSETS[@]}"; do
+              url="https://github.com/${REPO}/releases/download/${TAG}/${asset}"
+              if ! curl -fsSL --head "$url" >/dev/null 2>&1; then
+                echo "Asset not yet available: $asset"
+                all_found=false
+                break
+              fi
+            done
+
+            if [ "$all_found" = true ]; then
+              echo "All assets are available!"
+              break
+            fi
+
+            if [ $i -eq 60 ]; then
+              echo "Timeout: Not all assets became available"
+              exit 1
+            fi
+
+            sleep 10
+          done
+
       - name: Compute SHAs from release assets
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${{ github.ref_name }}"   # e.g., v0.1.0
-          REPO="${{ github.repository }}" # e.g., Adarsh-Roy/gthr
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
 
           ARM64_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-aarch64-apple-darwin.tar.gz"
           X86_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-x86_64-apple-darwin.tar.gz"
           LINUX_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-x86_64-unknown-linux-gnu.tar.gz"
 
-          curl -fL --retry 5 -o arm64.tar.gz "${ARM64_URL}"
-          curl -fL --retry 5 -o x86.tar.gz    "${X86_URL}"
-          curl -fL --retry 5 -o linux.tar.gz  "${LINUX_URL}"
+          echo "Downloading release assets..."
+          curl -fL --retry 5 --retry-delay 5 -o arm64.tar.gz "${ARM64_URL}"
+          curl -fL --retry 5 --retry-delay 5 -o x86.tar.gz    "${X86_URL}"
+          curl -fL --retry 5 --retry-delay 5 -o linux.tar.gz  "${LINUX_URL}"
 
+          echo "Computing checksums..."
           echo "ARM64_SHA=$(sha256sum arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "X86_SHA=$(sha256sum x86.tar.gz    | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "LINUX_SHA=$(sha256sum linux.tar.gz| cut -d' ' -f1)" >> "$GITHUB_ENV"
@@ -166,12 +215,30 @@ EOF
 
       - name: Commit & push
         working-directory: tap
+        env:
+          TAG: ${{ env.TAG }}
         run: |
-          set -e
+          set -euo pipefail
+
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Check if there are any changes
+          if git diff --quiet Formula/gthr.rb; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
           git add Formula/gthr.rb
-          git commit -m "Update gthr formula for ${TAG}" || echo "No changes"
-          # Rebase in case someone touched the tap meanwhile
-          git pull --rebase || true
+          git commit -m "Update gthr formula to ${TAG}"
+
+          # Pull any remote changes and rebase
+          git fetch origin main
+          git rebase origin/main || {
+            echo "Rebase failed, attempting merge"
+            git rebase --abort
+            git merge origin/main
+          }
+
+          # Push changes
           git push origin HEAD:main
