@@ -29,6 +29,7 @@ chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 dirs = "5.0"
 arboard = "3.4"
+ignore = "0.4"
 
 [dev-dependencies]
 tempfile = "3.22.0"

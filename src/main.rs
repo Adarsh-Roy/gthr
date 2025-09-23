@@ -135,7 +135,7 @@ async fn run_non_interactive_mode(cli: &Cli) -> Result<()> {
 }
 
 async fn run_direct_mode(cli: &Cli, _include: &[String], _exclude: &[String]) -> Result<()> {
-    let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, false);
+    let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
     let tree = traverser.traverse(&cli.root)?;
 
     // TODO: Apply include/exclude patterns to the tree

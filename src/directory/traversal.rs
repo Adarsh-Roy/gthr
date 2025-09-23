@@ -1,6 +1,6 @@
 use std::path::Path;
-use walkdir::{DirEntry, WalkDir};
 use anyhow::Result;
+use ignore::WalkBuilder;
 use super::tree::DirectoryTree;
 use super::state::SelectionState;
 
@@ -30,25 +30,49 @@ impl DirectoryTraverser {
         };
         tree.set_state(tree.root_index, initial_state);
 
-        let walker = WalkDir::new(root_path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|entry| self.should_include_entry(entry));
+        let mut builder = WalkBuilder::new(root_path);
 
-        for entry in walker {
-            if entry.path() == root_path {
+        // Configure the walker based on our settings
+        if !self.respect_gitignore {
+            builder.git_ignore(false)
+                   .git_global(false)
+                   .git_exclude(false);
+        }
+
+        // Build the walker and iterate
+        let walker = builder.build();
+
+        for result in walker {
+            let entry = match result {
+                Ok(entry) => entry,
+                Err(_) => continue, // Skip entries we can't read
+            };
+
+            let path = entry.path();
+
+            if path == root_path {
                 continue; // Skip root as it's already added
             }
 
-            let is_directory = entry.file_type().is_dir();
-            let parent_path = entry.path().parent().unwrap_or(root_path);
+            // Apply our custom filtering
+            if !self.should_include_entry_by_path(path) {
+                continue;
+            }
 
-            if let Some(node_index) = tree.add_node(entry.path().to_path_buf(), is_directory, parent_path) {
+            let is_directory = entry.file_type().map_or(false, |ft| ft.is_dir());
+            let parent_path = path.parent().unwrap_or(root_path);
+
+            if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path) {
                 // Set file size for files
                 if !is_directory {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Some(node) = tree.get_node_mut(node_index) {
-                            node.size = Some(metadata.len());
+                    if let Ok(metadata) = std::fs::metadata(path) {
+                        if metadata.len() <= self.max_file_size {
+                            if let Some(node) = tree.get_node_mut(node_index) {
+                                node.size = Some(metadata.len());
+                            }
+                        } else {
+                            // Skip files that are too large
+                            continue;
                         }
                     }
                 }
@@ -61,9 +85,7 @@ impl DirectoryTraverser {
         Ok(tree)
     }
 
-    fn should_include_entry(&self, entry: &DirEntry) -> bool {
-        let path = entry.path();
-
+    fn should_include_entry_by_path(&self, path: &Path) -> bool {
         // Skip hidden files and directories if not explicitly included
         if let Some(name) = path.file_name() {
             let name_str = name.to_string_lossy();
@@ -78,31 +100,8 @@ impl DirectoryTraverser {
             }
         }
 
-        // Check file size for regular files
-        if entry.file_type().is_file() {
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.len() > self.max_file_size {
-                    return false;
-                }
-            }
-        }
-
-        // TODO: Implement gitignore checking
-        if self.respect_gitignore {
-            // For now, skip common build/cache directories
-            if let Some(name) = path.file_name() {
-                let name_str = name.to_string_lossy();
-                if matches!(
-                    name_str.as_ref(),
-                    "node_modules" | "target" | "build" | "dist" | ".git" | ".svn" | ".hg"
-                        | "__pycache__" | ".pytest_cache" | ".coverage" | "coverage"
-                        | ".nyc_output" | "vendor" | "bin" | "obj" | ".vscode" | ".idea"
-                        | ".vs" | "*.tmp" | "*.temp" | "*.log"
-                ) {
-                    return false;
-                }
-            }
-        }
+        // Note: gitignore filtering is now handled by the ignore crate's WalkBuilder
+        // File size filtering is handled in the main loop
 
         true
     }
@@ -129,7 +128,7 @@ mod tests {
         let traverser = DirectoryTraverser::new(true, 1024 * 1024, false);
         let tree = traverser.traverse(root_path)?;
 
-        assert!(tree.nodes.len() >= 3); // root, src, main.rs, README.md (target should be filtered)
+        assert!(tree.nodes.len() >= 3); // root, src, main.rs, README.md
 
         Ok(())
     }
