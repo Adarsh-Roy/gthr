@@ -12,7 +12,7 @@ A powerful CLI tool for directory text ingestion, similar to gitingest web app, 
   - 🟡 Yellow: Partially included (mixed children states)
 - **Multiple Modes**: Pre-include everything or start with everything excluded
 - **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Max file size limit (default 1 MB)
+- **Configurable**: Set max file size limit (default 1 MB), ignore or respect .gitignore
 - **Smart Output**: Markdown output with syntax highlighting, automatically copies to clipboard
 - **Vim-like Controls**: Vim-like navigation support (Ctrl+J/K) alongside arrow keys
 
@@ -148,7 +148,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [ ] Configuration file support (.textingestrc)
 - [ ] Custom include/exclude patterns (glob support, regex support in the search area)
 - [ ] Multiple output formats (JSON, plain text)
-- [ ] Respect .gitignore
 - [ ] Preset configurations for different project types
 - [ ] Performance optimizations for huge directories
 ```
