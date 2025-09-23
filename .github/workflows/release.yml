@@ -37,9 +37,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt, clippy
 
       - name: Install musl-tools (Linux musl only)
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -153,7 +154,7 @@ jobs:
 
       - name: Clone tap repo
         run: |
-          git clone --depth 1 "https://x-access-token:${{ secrets.TAP_PUSH_TOKEN }}@github.com/Adarsh-Roy/homebrew-gthr.git" tap
+          git clone --depth 1 "https://${{ secrets.TAP_PUSH_TOKEN }}@github.com/Adarsh-Roy/homebrew-gthr.git" tap
 
       - name: Update Formula/gthr.rb
         working-directory: tap
@@ -222,6 +223,8 @@ jobs:
 
       - name: Commit & push
         working-directory: tap
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAP_PUSH_TOKEN }}
         run: |
           set -euo pipefail
           
@@ -236,6 +239,9 @@ jobs:
           fi
           
           git commit -m "Update gthr formula to ${TAG}"
+          
+          # Set the remote URL with the token
+          git remote set-url origin "https://${GITHUB_TOKEN}@github.com/Adarsh-Roy/homebrew-gthr.git"
           
           # Pull with rebase to handle any concurrent changes
           git pull --rebase origin main || true
