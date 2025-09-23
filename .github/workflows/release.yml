@@ -167,50 +167,57 @@ jobs:
           # Ensure Formula directory exists
           mkdir -p Formula
           
-          # Create the formula file with proper variable substitution
-          cat > Formula/gthr.rb <<EOF
-class Gthr < Formula
-  desc "A CLI tool for interactive directory text ingestion with fuzzy finder"
-  homepage "https://github.com/Adarsh-Roy/gthr"
-  version "${version_without_v}"
-  license "MIT"
+          # Remove any existing formula file
+          rm -f Formula/gthr.rb
+          
+          # Create a completely new formula file
+          cat > Formula/gthr.rb <<FORMULA_END
+          class Gthr < Formula
+            desc "A CLI tool for interactive directory text ingestion with fuzzy finder"
+            homepage "https://github.com/Adarsh-Roy/gthr"
+            version "${version_without_v}"
+            license "MIT"
 
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-aarch64-apple-darwin.tar.gz"
-      sha256 "${ARM64_SHA}"
-    else
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-apple-darwin.tar.gz"
-      sha256 "${X86_SHA}"
-    end
-  end
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-aarch64-apple-darwin.tar.gz"
+                sha256 "${ARM64_SHA}"
+              else
+                url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-apple-darwin.tar.gz"
+                sha256 "${X86_SHA}"
+              end
+            end
 
-  on_linux do
-    if Hardware::CPU.intel?
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "${LINUX_SHA}"
-    end
-  end
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${LINUX_SHA}"
+              end
+            end
 
-  def install
-    if OS.mac?
-      if Hardware::CPU.arm?
-        bin.install "gthr-aarch64-apple-darwin" => "gthr"
-      else
-        bin.install "gthr-x86_64-apple-darwin" => "gthr"
-      end
-    elsif OS.linux?
-      bin.install "gthr-x86_64-unknown-linux-gnu" => "gthr"
-    end
-  end
+            def install
+              if OS.mac?
+                if Hardware::CPU.arm?
+                  bin.install "gthr-aarch64-apple-darwin" => "gthr"
+                else
+                  bin.install "gthr-x86_64-apple-darwin" => "gthr"
+                end
+              elsif OS.linux?
+                bin.install "gthr-x86_64-unknown-linux-gnu" => "gthr"
+              end
+            end
 
-  test do
-    system "#{bin}/gthr", "--help"
-  end
-end
-EOF
+            test do
+              system "#{bin}/gthr", "--help"
+            end
+          end
+          FORMULA_END
+          
+          # Remove leading spaces that were added for YAML formatting
+          sed -i 's/^          //' Formula/gthr.rb
           
           echo "Formula updated successfully"
+          echo "Contents of Formula/gthr.rb:"
           cat Formula/gthr.rb
 
       - name: Commit & push
