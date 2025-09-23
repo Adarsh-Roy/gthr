@@ -7,7 +7,7 @@ class Gthr < Formula
   on_macos do
     if Hardware::CPU.arm?
       url "https://github.com/Adarsh-Roy/gthr/releases/download/v0.1.0/gthr-aarch64-apple-darwin.tar.gz"
-      sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+      sha256 "de4b38af773a12e24c28e9ae766f7ffa84f639deb76dd7b8a90068df8f254247"
     else
       url "https://github.com/Adarsh-Roy/gthr/releases/download/v0.1.0/gthr-x86_64-apple-darwin.tar.gz"
       sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"

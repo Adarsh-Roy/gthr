@@ -69,7 +69,7 @@ jobs:
         with:
           files: ${{ matrix.name }}.tar.gz
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Asset (Windows)
         uses: softprops/action-gh-release@v1
@@ -77,4 +77,4 @@ jobs:
         with:
           files: ${{ matrix.name }}.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
