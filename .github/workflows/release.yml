@@ -63,11 +63,18 @@ jobs:
         run: |
           7z a ${{ matrix.name }}.zip ${{ matrix.name }}
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset (Unix)
         uses: softprops/action-gh-release@v1
+        if: matrix.os != 'windows-latest'
         with:
-          files: |
-            ${{ matrix.name }}.tar.gz
-            ${{ matrix.name }}.zip
+          files: ${{ matrix.name }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset (Windows)
+        uses: softprops/action-gh-release@v1
+        if: matrix.os == 'windows-latest'
+        with:
+          files: ${{ matrix.name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
