@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write   # needed for gh-release uploads
+  contents: write
 
 jobs:
   build:
@@ -42,7 +42,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install musl-tools (Linux musl only)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: ${{ matrix.target == 'x86_64-unknown-linux-musl' }}
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Build
@@ -52,22 +52,22 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/gthr.exe "${{ matrix.name }}"
+            cp "target/${{ matrix.target }}/release/gthr.exe" "${{ matrix.name }}"
           else
-            cp target/${{ matrix.target }}/release/gthr "${{ matrix.name }}"
+            cp "target/${{ matrix.target }}/release/gthr" "${{ matrix.name }}"
           fi
 
       - name: Create tarball (Unix)
-        if: matrix.os != 'windows-latest'
+        if: ${{ matrix.os != 'windows-latest' }}
         run: tar -czf "${{ matrix.name }}.tar.gz" "${{ matrix.name }}"
 
       - name: Create zip (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ matrix.os == 'windows-latest' }}
         run: 7z a "${{ matrix.name }}.zip" "${{ matrix.name }}"
 
       - name: Upload Release Asset (Unix)
+        if: ${{ matrix.os != 'windows-latest' }}
         uses: softprops/action-gh-release@v1
-        if: matrix.os != 'windows-latest'
         with:
           files: ${{ matrix.name }}.tar.gz
           draft: false
@@ -76,8 +76,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Release Asset (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
         uses: softprops/action-gh-release@v1
-        if: matrix.os == 'windows-latest'
         with:
           files: ${{ matrix.name }}.zip
           draft: false
@@ -89,71 +89,26 @@ jobs:
     name: Update Homebrew tap formula
     needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
-      - name: Wait for release assets to be available
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-
-          echo "Waiting for all release assets to be available..."
-
-          # Required assets
-          ASSETS=(
-            "gthr-aarch64-apple-darwin.tar.gz"
-            "gthr-x86_64-apple-darwin.tar.gz"
-            "gthr-x86_64-unknown-linux-gnu.tar.gz"
-          )
-
-          # Wait up to 10 minutes for all assets
-          for i in {1..60}; do
-            echo "Attempt $i/60: Checking for assets..."
-            all_found=true
-
-            for asset in "${ASSETS[@]}"; do
-              url="https://github.com/${REPO}/releases/download/${TAG}/${asset}"
-              if ! curl -fsSL --head "$url" >/dev/null 2>&1; then
-                echo "Asset not yet available: $asset"
-                all_found=false
-                break
-              fi
-            done
-
-            if [ "$all_found" = true ]; then
-              echo "All assets are available!"
-              break
-            fi
-
-            if [ $i -eq 60 ]; then
-              echo "Timeout: Not all assets became available"
-              exit 1
-            fi
-
-            sleep 10
-          done
-
       - name: Compute SHAs from release assets
         shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          REPO="${{ github.repository }}"
-
           ARM64_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-aarch64-apple-darwin.tar.gz"
           X86_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-x86_64-apple-darwin.tar.gz"
           LINUX_URL="https://github.com/${REPO}/releases/download/${TAG}/gthr-x86_64-unknown-linux-gnu.tar.gz"
 
-          echo "Downloading release assets..."
           curl -fL --retry 5 --retry-delay 5 -o arm64.tar.gz "${ARM64_URL}"
           curl -fL --retry 5 --retry-delay 5 -o x86.tar.gz    "${X86_URL}"
           curl -fL --retry 5 --retry-delay 5 -o linux.tar.gz  "${LINUX_URL}"
 
-          echo "Computing checksums..."
           echo "ARM64_SHA=$(sha256sum arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
-          echo "X86_SHA=$(sha256sum x86.tar.gz    | cut -d' ' -f1)" >> "$GITHUB_ENV"
-          echo "LINUX_SHA=$(sha256sum linux.tar.gz| cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "X86_SHA=$(sha256sum x86.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "LINUX_SHA=$(sha256sum linux.tar.gz | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "TAG=${TAG}" >> "$GITHUB_ENV"
 
       - name: Clone tap repo
@@ -169,29 +124,30 @@ jobs:
           X86_SHA: ${{ env.X86_SHA }}
           LINUX_SHA: ${{ env.LINUX_SHA }}
         run: |
+          set -euo pipefail
           version_without_v="${TAG#v}"
           mkdir -p Formula
-          cat > Formula/gthr.rb <<EOF
+          cat > Formula/gthr.rb <<'RUBY'
 class Gthr < Formula
   desc "A CLI tool for interactive directory text ingestion with fuzzy finder"
   homepage "https://github.com/Adarsh-Roy/gthr"
-  version "${version_without_v}"
+  version "__VERSION__"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-aarch64-apple-darwin.tar.gz"
-      sha256 "${ARM64_SHA}"
+      url "https://github.com/Adarsh-Roy/gthr/releases/download/__TAG__/gthr-aarch64-apple-darwin.tar.gz"
+      sha256 "__ARM64_SHA__"
     else
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-apple-darwin.tar.gz"
-      sha256 "${X86_SHA}"
+      url "https://github.com/Adarsh-Roy/gthr/releases/download/__TAG__/gthr-x86_64-apple-darwin.tar.gz"
+      sha256 "__X86_SHA__"
     end
   end
 
   on_linux do
     if Hardware::CPU.intel?
-      url "https://github.com/Adarsh-Roy/gthr/releases/download/${TAG}/gthr-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "${LINUX_SHA}"
+      url "https://github.com/Adarsh-Roy/gthr/releases/download/__TAG__/gthr-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "__LINUX_SHA__"
     end
   end
 
@@ -211,7 +167,12 @@ class Gthr < Formula
     system "#{bin}/gthr", "--help"
   end
 end
-EOF
+RUBY
+          sed -i "s/__VERSION__/${version_without_v}/" Formula/gthr.rb
+          sed -i "s/__TAG__/${TAG}/g" Formula/gthr.rb
+          sed -i "s/__ARM64_SHA__/${ARM64_SHA}/" Formula/gthr.rb
+          sed -i "s/__X86_SHA__/${X86_SHA}/" Formula/gthr.rb
+          sed -i "s/__LINUX_SHA__/${LINUX_SHA}/" Formula/gthr.rb
 
       - name: Commit & push
         working-directory: tap
@@ -219,26 +180,13 @@ EOF
           TAG: ${{ env.TAG }}
         run: |
           set -euo pipefail
-
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Check if there are any changes
-          if git diff --quiet Formula/gthr.rb; then
+          git add Formula/gthr.rb
+          if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-
-          git add Formula/gthr.rb
           git commit -m "Update gthr formula to ${TAG}"
-
-          # Pull any remote changes and rebase
-          git fetch origin main
-          git rebase origin/main || {
-            echo "Rebase failed, attempting merge"
-            git rebase --abort
-            git merge origin/main
-          }
-
-          # Push changes
+          git pull --rebase origin main || true
           git push origin HEAD:main
