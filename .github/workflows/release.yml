@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: gthr-x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            name: gthr-x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: gthr-x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: gthr-aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: gthr-x86_64-pc-windows-msvc.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools (Linux musl only)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare binary
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp target/${{ matrix.target }}/release/gthr.exe ${{ matrix.name }}
+          else
+            cp target/${{ matrix.target }}/release/gthr ${{ matrix.name }}
+          fi
+
+      - name: Create tarball (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          tar -czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+
+      - name: Create zip (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          7z a ${{ matrix.name }}.zip ${{ matrix.name }}
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

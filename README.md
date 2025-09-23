@@ -18,11 +18,24 @@ A powerful CLI tool for directory text ingestion, similar to gitingest web app, 
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+# Add the tap and install
+brew tap adarsh-roy/gthr
+brew install gthr
+```
+
+Or install directly:
+```bash
+brew install adarsh-roy/gthr/gthr
+```
+
 ### Build from Source
 
 ```bash
-git clone <repository-url>
-cd text-ingest-cli
+git clone https://github.com/Adarsh-Roy/gthr.git
+cd gthr
 cargo build --release
 ```
 
