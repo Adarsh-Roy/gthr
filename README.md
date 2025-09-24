@@ -1,6 +1,8 @@
 # gthr
 
-A CLI tool for directory text ingestion, similar to gitingest web app, with interactive fuzzy finder capabilities with the ability to interactively choose what to include or exclude using a modern terminal user interface.
+A CLI tool for directory text ingestion, similar to gitingest web app,
+with interactive fuzzy finder capabilities with the ability to interactively choose
+what to include or exclude using a modern terminal user interface.
 
 ## Features
 
@@ -12,13 +14,13 @@ A CLI tool for directory text ingestion, similar to gitingest web app, with inte
   - 🟡 Yellow: Partially included (mixed children states)
 - **Multiple Modes**: Pre-include everything or start with everything excluded
 - **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Set max file size limit (default 1 MB), ignore or respect .gitignore
+- **Configurable**: Set max file size limit (default 1 MB), ignore or respect `.gitignore`
 - **Smart Output**: Markdown output with syntax highlighting, automatically copies to clipboard
-- **Vim-like Controls**: Vim-like navigation support (Ctrl+J/K) alongside arrow keys
+- **Vim-like Controls**: Vim-like navigation support (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
 
 ## Installation
 
-### Homebrew (Recommended)
+### Homebrew
 
 ```bash
 # Add the tap and install
@@ -27,11 +29,14 @@ brew install gthr
 ```
 
 Or install directly:
+
 ```bash
 brew install adarsh-roy/gthr/gthr
 ```
 
-### Build from Source
+### Build From Source
+
+**NOTE**: You must have `cargo` installed.
 
 ```bash
 git clone https://github.com/Adarsh-Roy/gthr.git
@@ -39,11 +44,19 @@ cd gthr
 cargo build --release
 ```
 
-The binary will be available at `target/release/gthr`.
+The binary will be available at `target/release/gthr`. To install it in a directory you can run:
+
+```bash
+install -m 755 ./target/release/gthr /path/to/bin
+```
+
+Make sure that `/path/to/bin` is in your `$PATH` environment variable.
 
 ## Usage
 
-### Interactive Mode (Default)
+### Interactive Mode
+
+By default, `gthr` runs in _Interactive Mode_.
 
 ```bash
 # Start interactive mode in current directory
@@ -72,10 +85,13 @@ gthr --non-interactive --include-all -o output.md
 gthr --non-interactive --include-all -r /path/to/project -o project_ingest.md
 ```
 
-### Direct Mode (WIP)
+### Direct Mode
+
+> [!WARNING]
+> This is a WIP.
 
 ```bash
-# Use include/exclude patterns (TODO: Not yet implemented)
+# Use include/exclude patterns (TODO: Not implemented yet)
 gthr direct --include "*.rs" --exclude "target/*"
 ```
 
@@ -130,7 +146,6 @@ gthr --max-file-size 524288
 gthr --non-interactive --include-all
 ```
 
-
 ## Dependencies
 
 - **clap**: Command line argument parsing
@@ -147,7 +162,7 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
 ## Similar Tools
 
@@ -158,7 +173,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Roadmap
 
-- [ ] Configuration file support (.textingestrc)
+- [ ] Configuration file support (`.textingestrc`)
 - [ ] Custom include/exclude patterns (glob support, regex support in the search area)
 - [ ] Multiple output formats (JSON, plain text)
 - [ ] Preset configurations for different project types
