@@ -1,13 +1,13 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 
-use crate::ui::app::{App, AppMode};
-use crate::fuzzy::filter::get_node_display_path;
 use crate::directory::state::SelectionState;
+use crate::fuzzy::filter::get_node_display_path;
+use crate::ui::app::{App, AppMode};
 
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let size = f.size();
@@ -72,7 +72,11 @@ fn draw_file_list(f: &mut Frame, app: &App, area: Rect) {
         .skip(app.scroll_offset)
         .take(area.height.saturating_sub(2) as usize)
         .map(|(display_index, &tree_index)| {
-            create_list_item(app, tree_index, display_index + app.scroll_offset == app.selected_index)
+            create_list_item(
+                app,
+                tree_index,
+                display_index + app.scroll_offset == app.selected_index,
+            )
         })
         .collect();
 
@@ -98,11 +102,7 @@ fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem
             SelectionState::Partial => "◐",
         };
 
-        let file_type_indicator = if node.is_directory {
-            "📁"
-        } else {
-            "📄"
-        };
+        let file_type_indicator = if node.is_directory { "📁" } else { "📄" };
 
         let cursor_indicator = if is_selected { "▶ " } else { "  " };
 
@@ -192,7 +192,7 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_help_interface(f: &mut Frame, app: &App, area: Rect) {
     let help_text = vec![
-        Line::from("Text Ingest CLI - Help"),
+        Line::from("gthr - Help"),
         Line::from(""),
         Line::from("Search:"),
         Line::from("  Type       Add any character to search (letters, numbers, symbols)"),
@@ -202,10 +202,6 @@ fn draw_help_interface(f: &mut Frame, app: &App, area: Rect) {
         Line::from("Navigation:"),
         Line::from("  ↑/↓        Move up/down"),
         Line::from("  ←/→        Move up/down (alternative)"),
-        Line::from("  Page Up    Page up"),
-        Line::from("  Page Down  Page down"),
-        Line::from("  Home       Go to top"),
-        Line::from("  End        Go to bottom"),
         Line::from(""),
         Line::from("Selection:"),
         Line::from("  Enter      Toggle ✓ included / ✗ excluded"),
