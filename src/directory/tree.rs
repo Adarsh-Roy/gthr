@@ -1,6 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
 use super::state::SelectionState;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::fs;
+use std::io::Read;
 
 #[derive(Debug, Clone)]
 pub struct FileNode {
@@ -62,7 +64,12 @@ impl DirectoryTree {
         }
     }
 
-    pub fn add_node(&mut self, path: PathBuf, is_directory: bool, parent_path: &Path) -> Option<usize> {
+    pub fn add_node(
+        &mut self,
+        path: PathBuf,
+        is_directory: bool,
+        parent_path: &Path,
+    ) -> Option<usize> {
         if self.path_to_index.contains_key(&path) {
             return self.path_to_index.get(&path).copied();
         }
@@ -194,35 +201,153 @@ impl DirectoryTree {
 }
 
 fn is_text_file(path: &Path) -> bool {
+    // Quick extension-based check for common text file extensions
+    if is_text_by_extension(path) {
+        return true;
+    }
+
+    // For files without recognized extensions or unknown extensions,
+    // use content-based detection with a small sample
+    is_text_by_content(path)
+}
+
+fn is_text_by_extension(path: &Path) -> bool {
     if let Some(extension) = path.extension() {
         let ext = extension.to_string_lossy().to_lowercase();
         matches!(
             ext.as_str(),
-            "txt" | "md" | "rs" | "py" | "js" | "ts" | "jsx" | "tsx" | "html" | "css" | "scss"
-                | "sass" | "json" | "yaml" | "yml" | "toml" | "xml" | "csv" | "sql" | "sh"
-                | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" | "dockerfile" | "makefile"
-                | "cmake" | "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "hxx" | "java" | "kt"
-                | "kts" | "scala" | "go" | "rb" | "php" | "swift" | "dart" | "lua" | "perl"
-                | "r" | "jl" | "hs" | "elm" | "clj" | "cljs" | "ex" | "exs" | "erl" | "hrl"
-                | "vim" | "vimrc" | "emacs" | "el" | "lisp" | "scm" | "rkt" | "ml" | "mli"
-                | "fs" | "fsi" | "fsx" | "fsscript" | "pas" | "pp" | "inc" | "asm" | "s"
-                | "config" | "conf" | "ini" | "properties" | "env" | "gitignore" | "gitattributes"
-                | "dockerignore" | "editorconfig" | "eslintrc" | "prettierrc" | "babelrc"
-                | "webpack" | "rollup" | "vite" | "package" | "lock" | "sum" | "mod"
+            // Programming languages
+            "rs" | "py" | "js" | "ts" | "jsx" | "tsx" | "java" | "c" | "cpp" | "cc" | "cxx"
+            | "h" | "hpp" | "hxx" | "go" | "rb" | "php" | "swift" | "kt" | "kts" | "scala"
+            | "dart" | "lua" | "perl" | "r" | "jl" | "hs" | "elm" | "clj" | "cljs"
+            | "ex" | "exs" | "erl" | "hrl" | "ml" | "mli" | "fs" | "fsi" | "fsx" | "fsscript"
+            | "pas" | "pp" | "inc" | "asm" | "s"
+            // Web technologies
+            | "html" | "htm" | "css" | "scss" | "sass" | "less" | "vue" | "svelte"
+            // Data formats
+            | "json" | "yaml" | "yml" | "toml" | "xml" | "csv" | "tsv" | "ini" | "conf"
+            | "config" | "properties" | "env"
+            // Documentation
+            | "md" | "txt" | "rst" | "adoc" | "tex" | "org"
+            // Scripts
+            | "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd"
+            // Configuration files
+            | "gitignore" | "gitattributes" | "dockerignore" | "editorconfig"
+            | "eslintrc" | "prettierrc" | "babelrc" | "npmrc" | "yarnrc"
+            // Build files
+            | "dockerfile" | "makefile" | "cmake" | "gradle" | "maven" | "ant"
+            | "webpack" | "rollup" | "vite" | "gulpfile" | "gruntfile"
+            // Package files
+            | "package" | "lock" | "sum" | "mod" | "cargo" | "gemfile" | "podfile"
+            | "requirements" | "pipfile" | "pyproject"
+            // Misc text formats
+            | "log" | "typ" | "typst" | "nix" | "vim" | "vimrc" | "emacs" | "el"
+            | "lisp" | "scm" | "rkt" | "sql" | "proto" | "graphql" | "gql"
         )
     } else {
-        // Check for files without extensions that are commonly text
+        // Files without extensions that are commonly text
         if let Some(name) = path.file_name() {
             let name = name.to_string_lossy().to_lowercase();
             matches!(
                 name.as_str(),
-                "readme" | "license" | "changelog" | "authors" | "contributors" | "makefile"
-                    | "dockerfile" | "vagrantfile" | "gemfile" | "rakefile" | "procfile"
-                    | "cmakelists" | "build" | "configure" | "install" | "news" | "todo"
-                    | "copying" | "manifest"
+                "readme" | "license" | "changelog" | "authors" | "contributors"
+                | "makefile" | "dockerfile" | "vagrantfile" | "gemfile" | "rakefile"
+                | "procfile" | "cmakelists" | "build" | "configure" | "install"
+                | "news" | "todo" | "copying" | "manifest" | "justfile"
             )
         } else {
             false
         }
     }
 }
+
+fn is_text_by_content(path: &Path) -> bool {
+    // Read first few KB to determine if file is text or binary
+    const SAMPLE_SIZE: usize = 8192; // 8KB sample
+
+    match fs::File::open(path) {
+        Ok(mut file) => {
+            let mut buffer = vec![0; SAMPLE_SIZE];
+            match file.read(&mut buffer) {
+                Ok(bytes_read) => {
+                    if bytes_read == 0 {
+                        return false; // Empty file, treat as non-text
+                    }
+
+                    buffer.truncate(bytes_read);
+
+                    // First try infer crate for magic number detection
+                    if let Some(_kind) = infer::get(&buffer) {
+                        // If infer detects it as a known binary type, it's not text
+                        return false;
+                    }
+
+                    // If infer doesn't detect it, use heuristic to check if it's text
+                    is_likely_text(&buffer)
+                }
+                Err(_) => false, // Can't read file
+            }
+        }
+        Err(_) => false, // Can't open file
+    }
+}
+
+fn is_likely_text(buffer: &[u8]) -> bool {
+    // Check for null bytes (strong indicator of binary content)
+    if buffer.contains(&0) {
+        return false;
+    }
+
+    // Count printable ASCII and UTF-8 characters
+    let mut printable_count = 0;
+    let mut i = 0;
+
+    while i < buffer.len() {
+        let byte = buffer[i];
+
+        // ASCII printable characters and common whitespace
+        if (byte >= 32 && byte <= 126) || byte == b'\n' || byte == b'\r' || byte == b'\t' {
+            printable_count += 1;
+            i += 1;
+        }
+        // Check for valid UTF-8 sequences
+        else if byte >= 0x80 {
+            if let Some(utf8_len) = get_utf8_char_length(byte) {
+                if i + utf8_len <= buffer.len() {
+                    let utf8_slice = &buffer[i..i + utf8_len];
+                    if std::str::from_utf8(utf8_slice).is_ok() {
+                        printable_count += utf8_len;
+                        i += utf8_len;
+                    } else {
+                        i += 1; // Skip invalid UTF-8
+                    }
+                } else {
+                    i += 1; // Not enough bytes for complete UTF-8 character
+                }
+            } else {
+                i += 1; // Invalid UTF-8 start byte
+            }
+        } else {
+            i += 1; // Non-printable ASCII
+        }
+    }
+
+    // If more than 95% of characters are printable, consider it text
+    let text_ratio = printable_count as f64 / buffer.len() as f64;
+    text_ratio >= 0.95
+}
+
+fn get_utf8_char_length(first_byte: u8) -> Option<usize> {
+    if first_byte & 0x80 == 0 {
+        Some(1) // ASCII
+    } else if first_byte & 0xE0 == 0xC0 {
+        Some(2) // 2-byte UTF-8
+    } else if first_byte & 0xF0 == 0xE0 {
+        Some(3) // 3-byte UTF-8
+    } else if first_byte & 0xF8 == 0xF0 {
+        Some(4) // 4-byte UTF-8
+    } else {
+        None // Invalid UTF-8 start byte
+    }
+}
+

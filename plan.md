@@ -181,7 +181,5 @@ anyhow = "1.0"
 - Robust error handling
 - Comprehensive documentation
 
-# BUG fixes required
+# BUG fixes required (this list keeps getting cleared out)
 - [ ] Fix the bug when cursor scrolls of the view
-- [ ] fix the way to indentify text files, .typ is not being detected by it. In fact add a
-  flag so that it just shows everything and leaves it upto the user to include/exclude 

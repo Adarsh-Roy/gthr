@@ -30,6 +30,7 @@ toml = "0.8"
 dirs = "5.0"
 arboard = "3.4"
 ignore = "0.4"
+infer = "0.16"
 
 [dev-dependencies]
 tempfile = "3.22.0"
