@@ -11,7 +11,6 @@ use crate::ui::app::{App, AppMode};
 
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let size = f.size();
-    app.viewport_height = size.height.saturating_sub(4) as usize; // Account for borders and status
 
     match app.mode {
         AppMode::Main => draw_main_interface(f, app, size),
@@ -19,7 +18,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     }
 }
 
-fn draw_main_interface(f: &mut Frame, app: &App, area: Rect) {
+fn draw_main_interface(f: &mut Frame, app: &mut App, area: Rect) {
     // Clear the background for transparency
     f.render_widget(Clear, area);
 
@@ -63,20 +62,26 @@ fn draw_search_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(search_paragraph, area);
 }
 
-fn draw_file_list(f: &mut Frame, app: &App, area: Rect) {
+fn draw_file_list(f: &mut Frame, app: &mut App, area: Rect) {
+    // Calculate the actual viewport height for the file list area
+    // Subtract 2 for the borders
+    let actual_viewport_height = area.height.saturating_sub(2) as usize;
+
+    // Update the app's viewport height to match the actual visible area
+    app.viewport_height = actual_viewport_height;
+
     let items: Vec<ListItem> = app
         .filtered_results
         .visible_items
         .iter()
-        .enumerate()
         .skip(app.scroll_offset)
-        .take(area.height.saturating_sub(2) as usize)
-        .map(|(display_index, &tree_index)| {
-            create_list_item(
-                app,
-                tree_index,
-                display_index + app.scroll_offset == app.selected_index,
-            )
+        .take(actual_viewport_height)
+        .enumerate()
+        .map(|(viewport_index, &tree_index)| {
+            // viewport_index is now 0-based index within the visible viewport
+            // The actual index in the filtered results is scroll_offset + viewport_index
+            let actual_index = app.scroll_offset + viewport_index;
+            create_list_item(app, tree_index, actual_index == app.selected_index)
         })
         .collect();
 

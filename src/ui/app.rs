@@ -1,6 +1,6 @@
-use crate::directory::tree::DirectoryTree;
 use crate::directory::state::SelectionState;
-use crate::fuzzy::filter::{filter_tree_nodes, FilteredResults};
+use crate::directory::tree::DirectoryTree;
+use crate::fuzzy::filter::{FilteredResults, filter_tree_nodes};
 use crate::ui::colors::ColorScheme;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,9 +42,14 @@ impl App {
     pub fn update_filtered_results(&mut self) {
         self.filtered_results = filter_tree_nodes(&self.tree, &self.search_query);
 
+        // Reset scroll position when search changes
+        self.scroll_offset = 0;
+
         // Adjust selected index if it's out of bounds
         if self.selected_index >= self.filtered_results.len() && !self.filtered_results.is_empty() {
             self.selected_index = self.filtered_results.len() - 1;
+        } else if self.filtered_results.is_empty() {
+            self.selected_index = 0;
         }
 
         self.update_scroll();
@@ -53,48 +58,82 @@ impl App {
     pub fn move_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
-            self.update_scroll();
+            self.update_scroll_for_move_up();
         }
     }
 
     pub fn move_down(&mut self) {
         if self.selected_index + 1 < self.filtered_results.len() {
             self.selected_index += 1;
-            self.update_scroll();
+            self.update_scroll_for_move_down();
         }
     }
 
     pub fn page_up(&mut self) {
         let page_size = self.viewport_height.saturating_sub(1);
+        let old_index = self.selected_index;
         self.selected_index = self.selected_index.saturating_sub(page_size);
-        self.update_scroll();
+
+        if old_index != self.selected_index {
+            // Scroll to show the selected item at the top of the viewport
+            self.scroll_offset = self.selected_index;
+        }
     }
 
     pub fn page_down(&mut self) {
         let page_size = self.viewport_height.saturating_sub(1);
-        self.selected_index = (self.selected_index + page_size).min(self.filtered_results.len().saturating_sub(1));
-        self.update_scroll();
+        let old_index = self.selected_index;
+        self.selected_index =
+            (self.selected_index + page_size).min(self.filtered_results.len().saturating_sub(1));
+
+        if old_index != self.selected_index {
+            // Scroll to show the selected item at the bottom of the viewport
+            if self.selected_index >= self.viewport_height {
+                self.scroll_offset = self.selected_index.saturating_sub(self.viewport_height - 1);
+            } else {
+                self.scroll_offset = 0;
+            }
+        }
     }
 
     pub fn move_to_top(&mut self) {
         self.selected_index = 0;
-        self.update_scroll();
+        self.scroll_offset = 0;
     }
 
     pub fn move_to_bottom(&mut self) {
         if !self.filtered_results.is_empty() {
             self.selected_index = self.filtered_results.len() - 1;
-            self.update_scroll();
+
+            // Position the last item at the bottom of the viewport
+            if self.selected_index >= self.viewport_height {
+                self.scroll_offset = self.selected_index.saturating_sub(self.viewport_height - 1);
+            } else {
+                self.scroll_offset = 0;
+            }
+        }
+    }
+
+    fn update_scroll_for_move_up(&mut self) {
+        // If the selected index is now above the visible area, scroll up
+        if self.selected_index < self.scroll_offset {
+            self.scroll_offset = self.selected_index;
+        }
+    }
+
+    fn update_scroll_for_move_down(&mut self) {
+        // If the selected index is now below the visible area, scroll down
+        if self.selected_index >= self.scroll_offset + self.viewport_height {
+            self.scroll_offset = self.selected_index.saturating_sub(self.viewport_height - 1);
         }
     }
 
     fn update_scroll(&mut self) {
-        let viewport_height = self.viewport_height;
-
+        // General scroll update - ensures selected item is visible
         if self.selected_index < self.scroll_offset {
             self.scroll_offset = self.selected_index;
-        } else if self.selected_index >= self.scroll_offset + viewport_height {
-            self.scroll_offset = self.selected_index.saturating_sub(viewport_height - 1);
+        } else if self.selected_index >= self.scroll_offset + self.viewport_height {
+            self.scroll_offset = self.selected_index.saturating_sub(self.viewport_height - 1);
         }
     }
 
@@ -166,13 +205,18 @@ impl App {
     }
 
     pub fn get_stats(&self) -> AppStats {
-        let total_files = self.tree.nodes.iter()
+        let total_files = self
+            .tree
+            .nodes
+            .iter()
             .filter(|node| !node.is_directory && node.is_text_file)
             .count();
 
         let included_files = self.tree.get_all_included_files().len();
 
-        let total_size: u64 = self.tree.get_all_included_files()
+        let total_size: u64 = self
+            .tree
+            .get_all_included_files()
             .iter()
             .filter_map(|node| node.size)
             .sum();
