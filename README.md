@@ -6,6 +6,7 @@ what to include or exclude using a modern terminal user interface.
 
 ## Features
 
+- **Smart Output**: Markdown output with syntax highlighting. Automatically copies to clipboard when you export. Optionally, saves to a file.
 - **Interactive Fuzzy Finder**: Browse and search through files with a responsive TUI
 - **Hierarchical Selection**: Including/excluding directories affects all children
 - **Color-coded Feedback**:
@@ -15,7 +16,6 @@ what to include or exclude using a modern terminal user interface.
 - **Multiple Modes**: Pre-include everything or start with everything excluded
 - **Smart File Detection**: Automatically identifies text files vs binary files
 - **Configurable**: Set max file size limit (default 1 MB), ignore or respect `.gitignore`
-- **Smart Output**: Markdown output with syntax highlighting, automatically copies to clipboard
 - **Vim-like Controls**: Vim-like navigation support (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
 
 ## Installation
@@ -146,16 +146,6 @@ gthr --max-file-size 524288
 gthr --non-interactive --include-all
 ```
 
-## Dependencies
-
-- **clap**: Command line argument parsing
-- **ratatui**: Rich terminal user interface framework
-- **crossterm**: Cross-platform terminal manipulation
-- **fuzzy-matcher**: Fuzzy string matching
-- **walkdir**: Directory traversal
-- **serde/toml**: Configuration serialization
-- **chrono**: Date and time handling
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
@@ -164,12 +154,11 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
-## Similar Tools
+## Similar Tools and Differences
 
-- [gitingest](https://gitingest.com/) - Web-based git repository ingestion
-- [tree](https://github.com/tree/tree) - Directory listing utility
-- [fd](https://github.com/sharkdp/fd) - Fast file finder
-- [fzf](https://github.com/junegunn/fzf) - Fuzzy finder
+- [gitingest](https://gitingest.com/) - Web-based git repository ingestion (awesome website). It has a cli version as well.
+    - It doesn't have interactive include/exclude with fuzzy matching.
+    - The digest is either printed to stdout or saved in a file, there's no "copy to clipboard and paste right away" option.
 
 ## Roadmap
 
