@@ -173,10 +173,9 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ## Roadmap
 
-- [ ] Configuration file support (`.textingestrc`)
+- [ ] Configuration file support (`.gthrrc`)
 - [ ] Custom include/exclude patterns (glob support, regex support in the search area)
 - [ ] Multiple output formats (JSON, plain text)
 - [ ] Preset configurations for different project types
 - [ ] Performance optimizations for huge directories
-```
 
