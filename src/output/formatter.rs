@@ -142,6 +142,7 @@ impl OutputFormatter {
                         "kt" | "kts" => "kotlin",
                         "scala" => "scala",
                         "md" => "markdown",
+                        "typ" => "typst",
                         _ => "",
                     };
                     output.push_str(language);
@@ -184,4 +185,3 @@ fn format_file_size(size: u64) -> String {
         format!("{:.1} {}", size_f, UNITS[unit_index])
     }
 }
-
