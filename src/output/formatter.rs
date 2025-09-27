@@ -1,6 +1,6 @@
-use std::fs;
-use anyhow::Result;
 use crate::directory::tree::{DirectoryTree, FileNode};
+use anyhow::Result;
+use std::fs;
 
 pub struct OutputFormatter {
     include_metadata: bool,
@@ -54,24 +54,30 @@ impl OutputFormatter {
 
     fn format_header(&self, tree: &DirectoryTree, included_files: &[&FileNode]) -> Result<String> {
         let root_path = &tree.nodes[tree.root_index].path;
-        let total_size: u64 = included_files
-            .iter()
-            .filter_map(|node| node.size)
-            .sum();
+        let total_size: u64 = included_files.iter().filter_map(|node| node.size).sum();
 
         let mut header = String::new();
         header.push_str(&format!("# Text Ingest Report\n"));
         header.push_str(&format!("**Root Directory:** {}\n", root_path.display()));
         header.push_str(&format!("**Files Included:** {}\n", included_files.len()));
-        header.push_str(&format!("**Total Size:** {}\n", format_file_size(total_size)));
-        header.push_str(&format!("**Generated:** {}\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
+        header.push_str(&format!(
+            "**Total Size:** {}\n",
+            format_file_size(total_size)
+        ));
+        header.push_str(&format!(
+            "**Generated:** {}\n",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        ));
 
         if self.include_metadata {
             header.push_str("\n## Included Files\n");
             for file_node in included_files {
-                let relative_path = file_node.path.strip_prefix(root_path)
+                let relative_path = file_node
+                    .path
+                    .strip_prefix(root_path)
                     .unwrap_or(&file_node.path);
-                let size_str = file_node.size
+                let size_str = file_node
+                    .size
                     .map(format_file_size)
                     .unwrap_or_else(|| "Unknown".to_string());
                 header.push_str(&format!("- {} ({})\n", relative_path.display(), size_str));
@@ -83,13 +89,15 @@ impl OutputFormatter {
 
     fn format_file(&self, tree: &DirectoryTree, file_node: &FileNode) -> Result<String> {
         let root_path = &tree.nodes[tree.root_index].path;
-        let relative_path = file_node.path.strip_prefix(root_path)
+        let relative_path = file_node
+            .path
+            .strip_prefix(root_path)
             .unwrap_or(&file_node.path);
 
         let mut output = String::new();
 
         // Always include file header for context
-        output.push_str(&format!("## {}\n\n", relative_path.display()));
+        output.push_str(&format!("# {}\n\n", relative_path.display()));
 
         if self.include_metadata {
             if let Some(size) = file_node.size {
@@ -176,3 +184,4 @@ fn format_file_size(size: u64) -> String {
         format!("{:.1} {}", size_f, UNITS[unit_index])
     }
 }
+
