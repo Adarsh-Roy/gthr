@@ -1,48 +1,52 @@
 mod cli;
+mod config;
+mod constants;
 mod directory;
-mod ui;
 mod fuzzy;
 mod output;
-mod config;
+mod ui;
 
+use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
-use directory::traversal::DirectoryTraverser;
-use ui::app::{App, AppMode};
-use ui::events::{EventHandler, AppEvent, handle_key_event, AppAction};
-use ui::interface::draw_ui;
-use output::writer::OutputWriter;
-use output::formatter::OutputFormatter;
-use anyhow::Result;
+use config::settings::Settings;
+use constants::DEFAULT_MAX_FILE_SIZE;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use directory::traversal::DirectoryTraverser;
+use output::formatter::OutputFormatter;
+use output::writer::OutputWriter;
 use ratatui::{
-    backend::{Backend, CrosstermBackend},
     Terminal,
+    backend::{Backend, CrosstermBackend},
 };
 use std::io;
 use std::time::Duration;
+use ui::app::{App, AppMode};
+use ui::events::{AppAction, AppEvent, EventHandler, handle_key_event};
+use ui::interface::draw_ui;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    let settings = Settings::load_with_project_root(&cli.root);
 
     match cli.command.as_ref().unwrap_or(&Commands::Interactive) {
         Commands::Interactive => {
-            run_interactive_mode(&cli).await?;
+            run_interactive_mode(&cli, &settings).await?;
         }
         Commands::Direct => {
-            run_direct_mode(&cli).await?;
+            run_direct_mode(&cli, &settings).await?;
         }
     }
 
     Ok(())
 }
 
-async fn run_interactive_mode(cli: &Cli) -> Result<()> {
+async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -51,7 +55,15 @@ async fn run_interactive_mode(cli: &Cli) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create application state
-    let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
+    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
+        settings.max_file_size // Use config file value
+    } else {
+        cli.max_file_size // Use explicitly set CLI value
+    };
+    let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
+    let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
+    let traverser =
+        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
     let mut tree = traverser.traverse(&cli.root)?;
 
     // Apply include/exclude patterns if provided
@@ -62,7 +74,7 @@ async fn run_interactive_mode(cli: &Cli) -> Result<()> {
     let mut app = App::new(tree);
 
     let event_handler = EventHandler::new();
-    let result = run_app(&mut terminal, &mut app, &event_handler, cli).await;
+    let result = run_app(&mut terminal, &mut app, &event_handler, cli, settings).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -81,6 +93,7 @@ async fn run_app<B: Backend>(
     app: &mut App,
     event_handler: &EventHandler,
     cli: &Cli,
+    settings: &Settings,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| draw_ui(f, app))?;
@@ -97,12 +110,11 @@ async fn run_app<B: Backend>(
                         continue;
                     }
 
-                    if let Some(action) = handle_key_event(key_event) {
+                    if let Some(action) = handle_key_event(key_event, &app.mode) {
                         match action {
                             AppAction::Escape => app.handle_escape(),
                             AppAction::Export => {
-                                generate_output(&app.tree, cli)?;
-                                app.quit();
+                                handle_export(app, cli, settings)?;
                             }
                             AppAction::ShowHelp => app.set_mode(AppMode::Help),
                             AppAction::ToggleSelection => app.toggle_selection(),
@@ -114,6 +126,14 @@ async fn run_app<B: Backend>(
                             AppAction::MoveToBottom => app.move_to_bottom(),
                             AppAction::SearchChar(c) => app.add_search_char(c),
                             AppAction::SearchBackspace => app.search_backspace(),
+                            AppAction::FileSaveChar(c) => app.add_file_save_char(c),
+                            AppAction::FileSaveBackspace => app.file_save_backspace(),
+                            AppAction::FileSaveConfirm => {
+                                if let Some(content) = &app.pending_content.clone() {
+                                    save_file_from_dialog(&app, content)?;
+                                    app.quit();
+                                }
+                            }
                         }
                     }
                 }
@@ -128,19 +148,30 @@ async fn run_app<B: Backend>(
     Ok(())
 }
 
-
-async fn run_direct_mode(cli: &Cli) -> Result<()> {
-    let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
+async fn run_direct_mode(cli: &Cli, settings: &Settings) -> Result<()> {
+    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
+        settings.max_file_size // Use config file value
+    } else {
+        cli.max_file_size // Use explicitly set CLI value
+    };
+    let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
+    let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
+    let traverser =
+        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
     let mut tree = traverser.traverse(&cli.root)?;
 
     // Apply include/exclude patterns to the tree
     apply_patterns(&mut tree, &cli.include, &cli.exclude);
 
-    generate_output(&tree, cli)?;
+    handle_direct_output(&tree, cli, settings)?;
     Ok(())
 }
 
-fn apply_patterns(tree: &mut directory::tree::DirectoryTree, include: &[String], exclude: &[String]) {
+fn apply_patterns(
+    tree: &mut directory::tree::DirectoryTree,
+    include: &[String],
+    exclude: &[String],
+) {
     use directory::state::SelectionState;
 
     // If no include patterns are specified, include everything by default
@@ -150,7 +181,10 @@ fn apply_patterns(tree: &mut directory::tree::DirectoryTree, include: &[String],
         if let Some(node) = tree.nodes.get(i) {
             // Use relative path from the root for pattern matching
             let relative_path = if let Some(root_node) = tree.nodes.get(tree.root_index) {
-                node.path.strip_prefix(&root_node.path).unwrap_or(&node.path).to_string_lossy()
+                node.path
+                    .strip_prefix(&root_node.path)
+                    .unwrap_or(&node.path)
+                    .to_string_lossy()
             } else {
                 node.path.to_string_lossy()
             };
@@ -159,7 +193,9 @@ fn apply_patterns(tree: &mut directory::tree::DirectoryTree, include: &[String],
 
             // Check include patterns
             for pattern in include {
-                if path_matches_pattern(&relative_path, pattern) || path_matches_pattern(&node.name, pattern) {
+                if path_matches_pattern(&relative_path, pattern)
+                    || path_matches_pattern(&node.name, pattern)
+                {
                     should_include = true;
                     break;
                 }
@@ -167,7 +203,9 @@ fn apply_patterns(tree: &mut directory::tree::DirectoryTree, include: &[String],
 
             // Check exclude patterns (these override includes)
             for pattern in exclude {
-                if path_matches_pattern(&relative_path, pattern) || path_matches_pattern(&node.name, pattern) {
+                if path_matches_pattern(&relative_path, pattern)
+                    || path_matches_pattern(&node.name, pattern)
+                {
                     should_include = false;
                     break;
                 }
@@ -216,19 +254,129 @@ fn path_matches_pattern(path: &str, pattern: &str) -> bool {
     }
 }
 
-fn generate_output(tree: &directory::tree::DirectoryTree, cli: &Cli) -> Result<()> {
+fn handle_export(app: &mut App, _cli: &Cli, settings: &Settings) -> Result<()> {
     let formatter = OutputFormatter::new()
         .with_metadata(false)
         .with_line_numbers(false);
 
-    let writer = OutputWriter::new().with_formatter(formatter);
+    let content = formatter.format_output(&app.tree)?;
 
+    if content.len() <= settings.max_clipboard_size {
+        // Try clipboard first
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if clipboard.set_text(&content).is_ok() {
+                println!("✓ Output copied to clipboard ({} bytes)", content.len());
+                app.quit();
+                return Ok(());
+            }
+        }
+    }
+
+    // Either too large or clipboard failed - start file save dialog
+    app.start_file_save(content);
+    Ok(())
+}
+
+fn handle_direct_output(tree: &directory::tree::DirectoryTree, cli: &Cli, settings: &Settings) -> Result<()> {
     if let Some(output_path) = &cli.output {
+        let formatter = OutputFormatter::new()
+            .with_metadata(false)
+            .with_line_numbers(false);
+        let writer = OutputWriter::new().with_formatter(formatter);
         writer.write_to_file(tree, output_path)?;
         println!("✓ Output written to: {}", output_path.display());
     } else {
-        writer.write_to_clipboard_or_prompt(tree)?;
+        let formatter = OutputFormatter::new()
+            .with_metadata(false)
+            .with_line_numbers(false);
+        let content = formatter.format_output(tree)?;
+
+        if content.len() <= settings.max_clipboard_size {
+            // Try clipboard first
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                if clipboard.set_text(&content).is_ok() {
+                    println!("✓ Output copied to clipboard ({} bytes)", content.len());
+                    return Ok(());
+                }
+            }
+        }
+
+        // Either too large or clipboard failed - use text prompt
+        save_file_with_text_prompt(tree, &content, settings)?;
     }
 
     Ok(())
 }
+
+fn save_file_with_text_prompt(tree: &directory::tree::DirectoryTree, content: &str, settings: &Settings) -> Result<()> {
+    use std::fs;
+    use std::io::{self, Write};
+    use std::path::Path;
+
+    if content.len() > settings.max_clipboard_size {
+        println!(
+            "⚠ Output is too large for clipboard ({} bytes > {})",
+            content.len(),
+            settings.format_clipboard_size()
+        );
+    }
+
+    print!("Enter file path to save output (or press Enter for default): ");
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    let input = input.trim();
+
+    let filename = if input.is_empty() {
+        OutputWriter::generate_default_filename(tree)
+    } else {
+        // Add .md extension if not present and doesn't have any extension
+        if !input.contains('.') {
+            format!("{}.md", input)
+        } else {
+            input.to_string()
+        }
+    };
+
+    let path = Path::new(&filename);
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, content)?;
+    println!("✓ Output saved to: {}", path.display());
+    Ok(())
+}
+
+fn save_file_from_dialog(app: &App, content: &str) -> Result<()> {
+    use std::fs;
+    use std::path::Path;
+
+    let filename = if app.file_save_input.trim().is_empty() {
+        // Generate default filename
+        OutputWriter::generate_default_filename(&app.tree)
+    } else {
+        let input = app.file_save_input.trim();
+        // Add .md extension if not present and doesn't have any extension
+        if !input.contains('.') {
+            format!("{}.md", input)
+        } else {
+            input.to_string()
+        }
+    };
+
+    let path = Path::new(&filename);
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    fs::write(path, content)?;
+    println!("✓ Output saved to: {}", path.display());
+    Ok(())
+}
+

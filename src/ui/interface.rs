@@ -15,6 +15,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     match app.mode {
         AppMode::Main => draw_main_interface(f, app, size),
         AppMode::Help => draw_help_interface(f, app, size),
+        AppMode::FileSave => draw_file_save_dialog(f, app, size),
     }
 }
 
@@ -54,7 +55,7 @@ fn draw_search_bar(f: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("🔍 Search")
+                .title("Search")
                 .border_style(app.color_scheme.border),
         )
         .wrap(Wrap { trim: true });
@@ -267,6 +268,83 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn draw_file_save_dialog(f: &mut Frame, app: &App, area: Rect) {
+    // Create a centered popup
+    let popup_area = centered_rect(60, 25, area);
+
+    // Clear the popup area
+    f.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title("Save File")
+        .borders(Borders::ALL)
+        .border_style(app.color_scheme.border)
+        .style(app.color_scheme.background);
+
+    // Split the popup area for title, input, and instructions
+    let popup_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2), // Instructions
+            Constraint::Length(3), // Input field
+            Constraint::Length(1), // Help text
+        ])
+        .split(popup_area);
+
+    // Content size info
+    let content_size = if let Some(content) = &app.pending_content {
+        format_file_size(content.len() as u64)
+    } else {
+        "Unknown".to_string()
+    };
+
+    let instructions = Paragraph::new(format!(
+        "Output is too large for clipboard ({}). Enter file path to save:",
+        content_size
+    ))
+    .style(app.color_scheme.text)
+    .wrap(Wrap { trim: true });
+
+    // Input field
+    let input_text = if app.file_save_input.is_empty() {
+        "📁 Enter file path (or press Enter for default)".to_string()
+    } else {
+        app.file_save_input.clone()
+    };
+
+    let input = Paragraph::new(input_text)
+        .style(if app.file_save_input.is_empty() {
+            app.color_scheme.help_text
+        } else {
+            app.color_scheme.text
+        })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(app.color_scheme.border)
+                .title("File Path"),
+        );
+
+    let help_text = Paragraph::new("Enter: Save | Esc: Cancel")
+        .style(app.color_scheme.help_text)
+        .alignment(Alignment::Center);
+
+    // Render all components
+    f.render_widget(block, popup_area);
+    f.render_widget(instructions, popup_chunks[0]);
+    f.render_widget(input, popup_chunks[1]);
+    f.render_widget(help_text, popup_chunks[2]);
+
+    // Position cursor in the input field
+    if !app.file_save_input.is_empty() {
+        f.set_cursor(
+            popup_chunks[1].x + app.file_save_input.len() as u16 + 1,
+            popup_chunks[1].y + 1,
+        );
+    }
 }
 
 fn format_file_size(size: u64) -> String {

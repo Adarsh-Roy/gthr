@@ -1,0 +1,24 @@
+# gthr Configuration File Sample
+#
+# Copy this file to one of these locations:
+#   Global:  ~/.config/.gthr.toml  (applies to all projects)
+#   Project: .gthr.toml            (overrides global for this project)
+#
+# Only specify the settings you want to change from defaults.
+
+# Maximum file size to include when traversing directories (in bytes)
+# Default: 2097152 (2MB)
+max_file_size = 2097152
+
+# Maximum size for clipboard operations (in bytes)
+# When output exceeds this size, you'll be prompted to save to a file instead
+# Default: 2097152 (2MB)
+max_clipboard_size = 2097152
+
+# Whether to respect .gitignore files by default
+# Default: true
+respect_gitignore = true
+
+# Whether to show hidden files and directories (starting with .)
+# Default: false
+show_hidden = false

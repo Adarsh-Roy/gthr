@@ -6,14 +6,16 @@ use super::state::SelectionState;
 
 pub struct DirectoryTraverser {
     respect_gitignore: bool,
+    show_hidden: bool,
     max_file_size: u64,
     include_all: bool,
 }
 
 impl DirectoryTraverser {
-    pub fn new(respect_gitignore: bool, max_file_size: u64, include_all: bool) -> Self {
+    pub fn new(respect_gitignore: bool, show_hidden: bool, max_file_size: u64, include_all: bool) -> Self {
         Self {
             respect_gitignore,
+            show_hidden,
             max_file_size,
             include_all,
         }
@@ -39,6 +41,9 @@ impl DirectoryTraverser {
                    .git_exclude(false);
         }
 
+        // Configure hidden files visibility
+        builder.hidden(!self.show_hidden);
+
         // Build the walker and iterate
         let walker = builder.build();
 
@@ -62,17 +67,22 @@ impl DirectoryTraverser {
             let is_directory = entry.file_type().map_or(false, |ft| ft.is_dir());
             let parent_path = path.parent().unwrap_or(root_path);
 
+            // Check file size before adding to tree
+            if !is_directory {
+                if let Ok(metadata) = std::fs::metadata(path) {
+                    if metadata.len() > self.max_file_size {
+                        // Skip files that are too large
+                        continue;
+                    }
+                }
+            }
+
             if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path) {
                 // Set file size for files
                 if !is_directory {
                     if let Ok(metadata) = std::fs::metadata(path) {
-                        if metadata.len() <= self.max_file_size {
-                            if let Some(node) = tree.get_node_mut(node_index) {
-                                node.size = Some(metadata.len());
-                            }
-                        } else {
-                            // Skip files that are too large
-                            continue;
+                        if let Some(node) = tree.get_node_mut(node_index) {
+                            node.size = Some(metadata.len());
                         }
                     }
                 }
@@ -86,16 +96,18 @@ impl DirectoryTraverser {
     }
 
     fn should_include_entry_by_path(&self, path: &Path) -> bool {
-        // Skip hidden files and directories if not explicitly included
-        if let Some(name) = path.file_name() {
-            let name_str = name.to_string_lossy();
-            if name_str.starts_with('.') && name_str != "." && name_str != ".." {
-                // Allow some common config files
-                if !matches!(
-                    name_str.as_ref(),
-                    ".gitignore" | ".gitattributes" | ".editorconfig" | ".env" | ".env.example"
-                ) {
-                    return false;
+        // Skip hidden files and directories unless show_hidden is enabled
+        if !self.show_hidden {
+            if let Some(name) = path.file_name() {
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with('.') && name_str != "." && name_str != ".." {
+                    // Allow some common config files
+                    if !matches!(
+                        name_str.as_ref(),
+                        ".gitignore" | ".gitattributes" | ".editorconfig" | ".env" | ".env.example"
+                    ) {
+                        return false;
+                    }
                 }
             }
         }
@@ -125,7 +137,7 @@ mod tests {
         fs::create_dir(root_path.join("target"))?;
         fs::write(root_path.join("target").join("debug"), "binary")?;
 
-        let traverser = DirectoryTraverser::new(true, 1024 * 1024, false);
+        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false);
         let tree = traverser.traverse(root_path)?;
 
         assert!(tree.nodes.len() >= 3); // root, src, main.rs, README.md

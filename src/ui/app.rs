@@ -7,6 +7,7 @@ use crate::ui::colors::ColorScheme;
 pub enum AppMode {
     Main,
     Help,
+    FileSave,
 }
 
 pub struct App {
@@ -19,6 +20,8 @@ pub struct App {
     pub color_scheme: ColorScheme,
     pub should_quit: bool,
     pub viewport_height: usize,
+    pub file_save_input: String,
+    pub pending_content: Option<String>,
 }
 
 impl App {
@@ -33,6 +36,8 @@ impl App {
             color_scheme: ColorScheme::default(),
             should_quit: false,
             viewport_height: 20, // Default, will be updated by UI
+            file_save_input: String::new(),
+            pending_content: None,
         };
 
         app.update_filtered_results();
@@ -194,6 +199,10 @@ impl App {
     pub fn handle_escape(&mut self) {
         if self.mode == AppMode::Help {
             self.mode = AppMode::Main;
+        } else if self.mode == AppMode::FileSave {
+            self.mode = AppMode::Main;
+            self.file_save_input.clear();
+            self.pending_content = None;
         } else if !self.search_query.is_empty() {
             // Clear search text if there is any
             self.search_query.clear();
@@ -201,6 +210,24 @@ impl App {
         } else {
             // Quit if search is empty
             self.quit();
+        }
+    }
+
+    pub fn start_file_save(&mut self, content: String) {
+        self.pending_content = Some(content);
+        self.file_save_input.clear();
+        self.mode = AppMode::FileSave;
+    }
+
+    pub fn add_file_save_char(&mut self, c: char) {
+        if self.mode == AppMode::FileSave {
+            self.file_save_input.push(c);
+        }
+    }
+
+    pub fn file_save_backspace(&mut self) {
+        if self.mode == AppMode::FileSave {
+            self.file_save_input.pop();
         }
     }
 
