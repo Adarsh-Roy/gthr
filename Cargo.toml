@@ -1,6 +1,6 @@
 [package]
 name = "gthr"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Adarsh Roy <adarshroy.formal@gmail.com>"]
 description = "A CLI tool for interactive directory text ingestion with fuzzy finder"
