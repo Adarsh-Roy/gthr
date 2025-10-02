@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use crate::constants::DEFAULT_MAX_FILE_SIZE;
 
 #[derive(Parser)]
 #[command(name = "gthr")]
@@ -38,7 +39,7 @@ pub struct Cli {
     pub respect_gitignore: bool,
 
     /// Maximum file size to include (in bytes)
-    #[arg(long, default_value = "2097152")] // 2MB default
+    #[arg(long, default_value_t = DEFAULT_MAX_FILE_SIZE)]
     pub max_file_size: u64,
 }
 
@@ -61,7 +62,7 @@ impl Default for Cli {
             exclude: Vec::new(),
             output: None,
             respect_gitignore: true,
-            max_file_size: 2097152,
+            max_file_size: DEFAULT_MAX_FILE_SIZE,
         }
     }
 }

@@ -62,17 +62,22 @@ impl DirectoryTraverser {
             let is_directory = entry.file_type().map_or(false, |ft| ft.is_dir());
             let parent_path = path.parent().unwrap_or(root_path);
 
+            // Check file size before adding to tree
+            if !is_directory {
+                if let Ok(metadata) = std::fs::metadata(path) {
+                    if metadata.len() > self.max_file_size {
+                        // Skip files that are too large
+                        continue;
+                    }
+                }
+            }
+
             if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path) {
                 // Set file size for files
                 if !is_directory {
                     if let Ok(metadata) = std::fs::metadata(path) {
-                        if metadata.len() <= self.max_file_size {
-                            if let Some(node) = tree.get_node_mut(node_index) {
-                                node.size = Some(metadata.len());
-                            }
-                        } else {
-                            // Skip files that are too large
-                            continue;
+                        if let Some(node) = tree.get_node_mut(node_index) {
+                            node.size = Some(metadata.len());
                         }
                     }
                 }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use anyhow::Result;
+use crate::constants::DEFAULT_MAX_FILE_SIZE;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -20,7 +21,7 @@ pub struct Settings {
     pub file_extensions: FileExtensionSettings,
 }
 
-fn default_max_file_size() -> u64 { 2 * 1024 * 1024 }
+fn default_max_file_size() -> u64 { DEFAULT_MAX_FILE_SIZE }
 fn default_max_clipboard_size() -> usize { 2 * 1024 * 1024 }
 fn default_respect_gitignore() -> bool { true }
 fn default_include_metadata() -> bool { true }

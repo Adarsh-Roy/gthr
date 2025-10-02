@@ -10,6 +10,7 @@ use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::settings::Settings;
+use constants::DEFAULT_MAX_FILE_SIZE;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -54,7 +55,7 @@ async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create application state
-    let max_file_size = if cli.max_file_size == 2097152 { // If using default CLI value
+    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
         settings.max_file_size // Use config file value
     } else {
         cli.max_file_size // Use explicitly set CLI value
@@ -146,7 +147,7 @@ async fn run_app<B: Backend>(
 }
 
 async fn run_direct_mode(cli: &Cli, settings: &Settings) -> Result<()> {
-    let max_file_size = if cli.max_file_size == 2097152 { // If using default CLI value
+    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
         settings.max_file_size // Use config file value
     } else {
         cli.max_file_size // Use explicitly set CLI value
