@@ -55,7 +55,7 @@ fn draw_search_bar(f: &mut Frame, app: &App, area: Rect) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("🔍 Search")
+                .title("Search")
                 .border_style(app.color_scheme.border),
         )
         .wrap(Wrap { trim: true });
