@@ -38,6 +38,10 @@ pub struct Cli {
     #[arg(long = "respect-gitignore", short = 'g', action = clap::ArgAction::Set)]
     pub respect_gitignore: Option<bool>,
 
+    /// Show hidden files and directories
+    #[arg(long = "show-hidden", short = 'H', action = clap::ArgAction::Set)]
+    pub show_hidden: Option<bool>,
+
     /// Maximum file size to include (in bytes)
     #[arg(long, default_value_t = DEFAULT_MAX_FILE_SIZE)]
     pub max_file_size: u64,
@@ -62,6 +66,7 @@ impl Default for Cli {
             exclude: Vec::new(),
             output: None,
             respect_gitignore: None,
+            show_hidden: None,
             max_file_size: DEFAULT_MAX_FILE_SIZE,
         }
     }

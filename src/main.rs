@@ -61,8 +61,9 @@ async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> {
         cli.max_file_size // Use explicitly set CLI value
     };
     let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
+    let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
     let traverser =
-        DirectoryTraverser::new(respect_gitignore, max_file_size, cli.include_all);
+        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
     let mut tree = traverser.traverse(&cli.root)?;
 
     // Apply include/exclude patterns if provided
@@ -154,8 +155,9 @@ async fn run_direct_mode(cli: &Cli, settings: &Settings) -> Result<()> {
         cli.max_file_size // Use explicitly set CLI value
     };
     let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
+    let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
     let traverser =
-        DirectoryTraverser::new(respect_gitignore, max_file_size, cli.include_all);
+        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
     let mut tree = traverser.traverse(&cli.root)?;
 
     // Apply include/exclude patterns to the tree

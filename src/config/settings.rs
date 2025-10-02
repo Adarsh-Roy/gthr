@@ -11,6 +11,8 @@ pub struct Settings {
     pub max_clipboard_size: usize,
     #[serde(default = "default_respect_gitignore")]
     pub respect_gitignore: bool,
+    #[serde(default = "default_show_hidden")]
+    pub show_hidden: bool,
     #[serde(default = "default_include_metadata")]
     pub include_metadata: bool,
     #[serde(default = "default_include_line_numbers")]
@@ -24,6 +26,7 @@ pub struct Settings {
 fn default_max_file_size() -> u64 { DEFAULT_MAX_FILE_SIZE }
 fn default_max_clipboard_size() -> usize { 2 * 1024 * 1024 }
 fn default_respect_gitignore() -> bool { true }
+fn default_show_hidden() -> bool { false }
 fn default_include_metadata() -> bool { true }
 fn default_include_line_numbers() -> bool { false }
 
@@ -63,6 +66,7 @@ impl Default for Settings {
             max_file_size: default_max_file_size(),
             max_clipboard_size: default_max_clipboard_size(),
             respect_gitignore: default_respect_gitignore(),
+            show_hidden: default_show_hidden(),
             include_metadata: default_include_metadata(),
             include_line_numbers: default_include_line_numbers(),
             default_output_dir: None,
@@ -144,6 +148,9 @@ impl Settings {
         }
         if project.respect_gitignore != default_respect_gitignore() {
             global.respect_gitignore = project.respect_gitignore;
+        }
+        if project.show_hidden != default_show_hidden() {
+            global.show_hidden = project.show_hidden;
         }
         if project.include_metadata != default_include_metadata() {
             global.include_metadata = project.include_metadata;

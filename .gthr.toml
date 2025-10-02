@@ -19,6 +19,10 @@ max_clipboard_size = 2097152
 # Default: true
 respect_gitignore = true
 
+# Whether to show hidden files and directories (starting with .)
+# Default: false
+show_hidden = false
+
 # File extensions used for quick text file vs. binary file classification
 [file_extensions]
 
