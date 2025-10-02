@@ -22,20 +22,3 @@ respect_gitignore = true
 # Whether to show hidden files and directories (starting with .)
 # Default: false
 show_hidden = false
-
-# File extensions used for quick text file vs. binary file classification
-[file_extensions]
-
-# File extensions that should be treated as text files 
-text_extensions = [
-    "txt", "md", "rs", "py", "js", "ts", "jsx", "tsx",
-    "html", "css", "scss", "sass", "json", "yaml", "yml",
-    "toml", "xml", "csv", "sql", "sh", "bash", "zsh", "fish"
-]
-
-# File extensions that should be treated as binary files (excluded from content)
-binary_extensions = [
-    "exe", "dll", "so", "dylib", "bin", "obj", "o", "a",
-    "lib", "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg",
-    "pdf", "zip", "tar", "gz", "7z", "rar"
-]

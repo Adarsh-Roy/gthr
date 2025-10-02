@@ -19,8 +19,6 @@ pub struct Settings {
     pub include_line_numbers: bool,
     #[serde(default)]
     pub default_output_dir: Option<PathBuf>,
-    #[serde(default)]
-    pub file_extensions: FileExtensionSettings,
 }
 
 fn default_max_file_size() -> u64 { DEFAULT_MAX_FILE_SIZE }
@@ -29,36 +27,6 @@ fn default_respect_gitignore() -> bool { true }
 fn default_show_hidden() -> bool { false }
 fn default_include_metadata() -> bool { true }
 fn default_include_line_numbers() -> bool { false }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileExtensionSettings {
-    #[serde(default = "default_text_extensions")]
-    pub text_extensions: Vec<String>,
-    #[serde(default = "default_binary_extensions")]
-    pub binary_extensions: Vec<String>,
-}
-
-fn default_text_extensions() -> Vec<String> {
-    vec![
-        "txt".to_string(), "md".to_string(), "rs".to_string(), "py".to_string(),
-        "js".to_string(), "ts".to_string(), "jsx".to_string(), "tsx".to_string(),
-        "html".to_string(), "css".to_string(), "scss".to_string(), "sass".to_string(),
-        "json".to_string(), "yaml".to_string(), "yml".to_string(), "toml".to_string(),
-        "xml".to_string(), "csv".to_string(), "sql".to_string(), "sh".to_string(),
-        "bash".to_string(), "zsh".to_string(), "fish".to_string(),
-    ]
-}
-
-fn default_binary_extensions() -> Vec<String> {
-    vec![
-        "exe".to_string(), "dll".to_string(), "so".to_string(), "dylib".to_string(),
-        "bin".to_string(), "obj".to_string(), "o".to_string(), "a".to_string(),
-        "lib".to_string(), "png".to_string(), "jpg".to_string(), "jpeg".to_string(),
-        "gif".to_string(), "bmp".to_string(), "ico".to_string(), "svg".to_string(),
-        "pdf".to_string(), "zip".to_string(), "tar".to_string(), "gz".to_string(),
-        "7z".to_string(), "rar".to_string(),
-    ]
-}
 
 impl Default for Settings {
     fn default() -> Self {
@@ -70,16 +38,6 @@ impl Default for Settings {
             include_metadata: default_include_metadata(),
             include_line_numbers: default_include_line_numbers(),
             default_output_dir: None,
-            file_extensions: FileExtensionSettings::default(),
-        }
-    }
-}
-
-impl Default for FileExtensionSettings {
-    fn default() -> Self {
-        Self {
-            text_extensions: default_text_extensions(),
-            binary_extensions: default_binary_extensions(),
         }
     }
 }
@@ -160,13 +118,6 @@ impl Settings {
         }
         if project.default_output_dir.is_some() {
             global.default_output_dir = project.default_output_dir;
-        }
-        // For file extensions, if they're explicitly set in project config, use them
-        if project.file_extensions.text_extensions != default_text_extensions() {
-            global.file_extensions.text_extensions = project.file_extensions.text_extensions;
-        }
-        if project.file_extensions.binary_extensions != default_binary_extensions() {
-            global.file_extensions.binary_extensions = project.file_extensions.binary_extensions;
         }
         global
     }

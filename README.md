@@ -1,12 +1,10 @@
 # gthr
 
-A CLI tool for directory text ingestion, similar to gitingest web app,
-with interactive fuzzy finder capabilities with the ability to interactively choose
-what to include or exclude using a modern terminal user interface.
+A CLI tool for directory text ingestion, similar to gitingest web app, with fuzzy finder for including/excluding files.
 
 ## Features
 
-- **Smart Output**: Markdown output with syntax highlighting. Automatically copies to clipboard when you export. Optionally, saves to a file.
+- **Smart Output**: Markdown output with syntax highlighting. Automatically copies to clipboard when you export. Optionally saves to a file.
 - **Interactive Fuzzy Finder**: Browse and search through files with a responsive TUI
 - **Hierarchical Selection**: Including/excluding directories affects all children
 - **Color-coded Feedback**:
@@ -15,7 +13,7 @@ what to include or exclude using a modern terminal user interface.
   - 🟡 Yellow: Partially included (mixed children states)
 - **Two Modes**: Interactive mode with fuzzy finder or direct mode with pattern matching
 - **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Set max file size limit (default 2 MB), set clipboard size limit, ignore or respect `.gitignore`
+- **Configurable**: Control file size limits, clipboard limits, gitignore behavior, and hidden file visibility
 - **Two-Tier Configuration**: Global config (`~/.config/.gthr.toml`) with project-specific overrides (`.gthr.toml`)
 - **Pattern Matching**: Supports glob patterns for include/exclude (e.g., `*.rs`, `**/*`)
 - **Vim-like Controls**: Vim-like navigation (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
@@ -33,162 +31,84 @@ brew install adarsh-roy/gthr/gthr
 **NOTE**: You must have `cargo` installed.
 
 ```bash
-git clone https://github.com/Adarsh-Roy/gthr.git
-cd gthr
-cargo build --release
+cargo install --git https://github.com/Adarsh-Roy/gthr --locked
 ```
-
-The binary will be available at `target/release/gthr`. To install it in a directory you can run:
-
-```bash
-install -m 755 ./target/release/gthr /path/to/bin
-```
-
-Make sure that `/path/to/bin` is in your `$PATH` environment variable.
 
 ## Usage
 
-### Interactive Mode
-
-By default, `gthr` runs in _Interactive Mode_.
+### Quick Start
 
 ```bash
-# Start interactive mode in current directory
+# Interactive mode (default)
 gthr
 
-# Explicitly run interactive mode
-gthr interactive
-
-# Start with all files pre-included
+# Interactive mode with all files pre-included
 gthr -I
 
-# Start with all files excluded (pick what to include, this is the default)
-gthr -E
-
-# Specify a different root directory
-gthr -r /path/to/directory
-
-# Save output to a file (it copies to clipboard regardless)
-gthr -o output.md
-
-# Ignore .gitignore files (include everything, even ignored files)
-gthr -g false
-
-# Start interactive mode with patterns pre-applied
-gthr -i "*.rs" -e "target/*" interactive
-
-# Complex example: include Rust files, exclude tests, ignore gitignore
-gthr -g false -i "*.rs" -e "*test*" -o rust_code.md interactive
-```
-
-### Direct Mode
-
-Generate output immediately without interactive interface using include/exclude patterns.
-
-```bash
-# Include only Rust files
+# Direct mode - include only Rust files
 gthr -i "*.rs" direct
 
-# Include multiple patterns
-gthr -i "*.rs" -i "*.toml" direct
+# Show hidden files
+gthr -H true
 
-# Include with exclusions
-gthr -i "**/*" -e "target/*" -e "*.log" direct
-
-# Save to file with gitignore disabled
-gthr -g false -i "*.rs" -o output.md direct
-
-# Process specific directory
-gthr -r /path/to/project -i "src/**/*.rs" direct
-
-# Pre-include everything then exclude specific patterns
-gthr -I -e "target/*" -e "*.log" direct
+# Ignore .gitignore files
+gthr -g false
 ```
 
-## Interactive Controls
+For all available options, use:
+```bash
+gthr --help
+```
 
-### Search
-- `Type any character` - Directly adds to search (letters, numbers, symbols)
+### Interactive mode controls
+
+**Search**
+- Type any character - Adds to search
 - `Backspace` - Delete search character
-- `Esc` - Clear search text (or quit if search is empty)
-
-### Navigation
-- `↑/↓` - Move up/down through files
-- `←/→` - Alternative up/down navigation
-- `Ctrl+J/Ctrl+K` - Vim-like up/down navigation
-
-### Selection
-- `Enter` - Toggle selection of current item (✓/✗)
-
-### Actions
-- `Ctrl+E` - Export output and quit
-- `Ctrl+H` - Show help
 - `Esc` - Clear search (or quit if search is empty)
 
+**Navigation**
+- `↑/↓` or `←/→` - Move through files
+- `Ctrl+J/Ctrl+K` - Vim-like navigation
+
+**Selection**
+- `Enter` - Toggle selection (✓/✗)
+
+**Actions**
+- `Ctrl+E` - Export and quit
+- `Ctrl+H` - Show help
+- `Esc` - Clear search or quit
+
 ### Output Behavior
-- **Default**: Copies output to clipboard (up to 2MB)
-- **Large files**: Shows save dialog if output exceeds 2MB
-- **Manual save**: Use `-o filename.md` to save directly to file
-
-## Command Line Options
-
-```
-Commands:
-  interactive  Run the interactive fuzzy finder interface (default)
-  direct       Generate text ingest directly without interaction
-  help         Print help information
-
-Global Options:
-  -r, --root <ROOT>                    Root directory to process [default: .]
-  -I, --include-all                    Pre-include all files and directories
-  -E, --exclude-all                    Pre-exclude all files and directories
-  -i, --include <PATTERN>              Pattern to include files (glob pattern)
-  -e, --exclude <PATTERN>              Pattern to exclude files (glob pattern)
-  -o, --output <OUTPUT>                Output file path
-  -g, --respect-gitignore <BOOL>       Respect .gitignore files [default: true]
-      --max-file-size <SIZE>           Maximum file size to include (in bytes) [default: 2097152]
-  -h, --help                           Print help
-  -V, --version                        Print version
-```
+- **Default**: Copies to clipboard (up to clipboard limit)
+- **Large output**: Shows save dialog if total size exceeds clipboard limit
+- **Manual save**: Use `-o filename.md` flag
 
 ## Configuration
 
-gthr supports a two-tier configuration system that allows you to set global defaults and override them on a per-project basis.
+gthr supports a two-tier configuration system with global defaults and per-project overrides.
 
 ### Configuration Files
 
 1. **Global Config**: `~/.config/.gthr.toml` (applies to all projects)
-2. **Project Config**: `.gthr.toml` in project root (overrides global settings)
+2. **Project Config**: `.gthr.toml` in project root (overrides global)
 
 ### Configuration Priority
 
-Settings are resolved in this order (highest to lowest priority):
-1. Command-line flags (highest priority)
-2. Project configuration (`.gthr.toml` in project root)
+Settings are resolved in order (highest to lowest priority):
+1. Command-line flags
+2. Project configuration (`.gthr.toml`)
 3. Global configuration (`~/.config/.gthr.toml`)
-4. Built-in defaults (lowest priority)
+4. Built-in defaults
 
 ### Sample Configuration
 
-A complete sample configuration is available in [`config-sample.toml`](./.gthr.toml).
-
-Create `~/.config/.gthr.toml` for global settings:
-
 ```toml
-# gthr Configuration File Sample
-#
-# Copy this file to one of these locations:
-#   Global:  ~/.config/.gthr.toml  (applies to all projects)
-#   Project: .gthr.toml            (overrides global for this project)
-#
-# Only specify the settings you want to change from defaults.
-
 # Maximum file size to include when traversing directories (in bytes)
 # Default: 2097152 (2MB)
 max_file_size = 2097152
 
 # Maximum size for clipboard operations (in bytes)
-# When output exceeds this size, you'll be prompted to save to a file instead
 # Default: 2097152 (2MB)
 max_clipboard_size = 2097152
 
@@ -196,84 +116,69 @@ max_clipboard_size = 2097152
 # Default: true
 respect_gitignore = true
 
-# File extensions used for quick text file vs. binary file classification
-[file_extensions]
-
-# File extensions that should be treated as text files 
-text_extensions = [
-    "txt", "md", "rs", "py", "js", "ts", "jsx", "tsx",
-    "html", "css", "scss", "sass", "json", "yaml", "yml",
-    "toml", "xml", "csv", "sql", "sh", "bash", "zsh", "fish"
-]
-
-# File extensions that should be treated as binary files (excluded from content)
-binary_extensions = [
-    "exe", "dll", "so", "dylib", "bin", "obj", "o", "a",
-    "lib", "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg",
-    "pdf", "zip", "tar", "gz", "7z", "rar"
-]
+# Whether to show hidden files and directories (starting with .)
+# Default: false
+show_hidden = false
 ```
 
-### Project-Specific Configuration
+A complete sample is available in [`.gthr.toml`](./.gthr.toml).
 
-Create `.gthr.toml` in your project root to override global settings:
+## Command Line Options
 
-```toml
-# Project-specific gthr configuration
-# Only specify settings you want to override
+```
+Commands:
+  interactive  Run the interactive fuzzy finder interface (default)
+  direct       Generate text ingest directly without interaction
 
-# Example: Smaller clipboard limit for this project
-max_clipboard_size = 4096
-
-# Example: Different file size limit
-max_file_size = 1048576
-
-# Example: Don't respect .gitignore for this project
-# respect_gitignore = false
+Options:
+  -r, --root <ROOT>                Root directory [default: .]
+  -I, --include-all                Pre-include all files
+  -E, --exclude-all                Pre-exclude all files (default)
+  -i, --include <PATTERN>          Include pattern (glob)
+  -e, --exclude <PATTERN>          Exclude pattern (glob)
+  -o, --output <OUTPUT>            Output file path
+  -g, --respect-gitignore <BOOL>   Respect .gitignore [default: true]
+  -H, --show-hidden <BOOL>         Show hidden files [default: false]
+      --max-file-size <SIZE>       Max file size in bytes [default: 2097152]
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
-## Usage examples
+## Examples
 
 ```bash
-# Exclude large files (limit to 512KB)
-gthr --max-file-size 524288
+# Include everything, show hidden files, ignore .gitignore
+gthr -I -H true -g false
 
-# Quick direct export of all Rust files, ignoring .gitignore
-gthr -g false -i "**/*.rs" -o rust_files.md direct
+# Direct mode - only Rust and TOML files
+gthr -i "*.rs" -i "*.toml" direct
 
-# Include everything but exclude build artifacts
-gthr -i "**/*" -e "target/*" -e "node_modules/*" -e "*.log" direct
+# Exclude build artifacts
+gthr -I -e "target/*" -e "node_modules/*" direct
 
-# Process specific directory with custom file size limit
-gthr -r /path/to/project --max-file-size 2097152 -i "src/**/*" direct
+# Custom file size limit
+gthr --max-file-size 5242880
 
-# Interactive mode with patterns: start with Rust files included, target excluded
-gthr -i "*.rs" -e "target/*" interactive
-
-# Include source files but exclude tests and builds
-gthr -I -e "*test*" -e "target/*" -e "build/*" -e "dist/*" direct
-
-# Multiple include patterns with exclusions
-gthr -i "*.rs" -i "*.toml" -i "*.md" -e "target/*" -o project_overview.md direct
+# Save to file
+gthr -o output.md
 ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+Contributions are welcome! Please submit issues, feature requests, or pull requests.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
 
-## Similar Tools and Differences
+## Similar Tools
 
-- [gitingest](https://gitingest.com/) - Web-based git repository ingestion (awesome website). It has a cli version as well.
-    - It doesn't have interactive include/exclude with fuzzy matching.
-    - The digest is either printed to stdout or saved in a file, there's no "copy to clipboard and paste right away" option.
+- [gitingest](https://gitingest.com/) - Web-based repository ingestion
+  - gthr adds interactive TUI with fuzzy matching
+  - gthr supports clipboard output for quick pasting
 
 ## Roadmap
 
-- [ ] Configuration file support (global and local)
-- [ ] Regex support in search bar in interactive mode
-- [ ] Performance optimizations for huge directories
-
+- [ ] Regex support in search bar
+- [ ] Keyboard shortcuts for settings in interactive mode
+- [ ] Performance optimizations for large directories
