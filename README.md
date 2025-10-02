@@ -183,6 +183,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ## Roadmap
 
-- [ ] Regex support in search bar
+- [ ] Regex support in search bar in interactive mode
 - [ ] Keyboard shortcuts for settings in interactive mode
 - [ ] Performance optimizations for large directories
+- [ ] Gather text context directly from github repository link
