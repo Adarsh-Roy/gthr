@@ -32,14 +32,10 @@ async fn main() -> Result<()> {
 
     match cli.command.as_ref().unwrap_or(&Commands::Interactive) {
         Commands::Interactive => {
-            if cli.non_interactive {
-                run_non_interactive_mode(&cli).await?;
-            } else {
-                run_interactive_mode(&cli).await?;
-            }
+            run_interactive_mode(&cli).await?;
         }
-        Commands::Direct { include, exclude } => {
-            run_direct_mode(&cli, include, exclude).await?;
+        Commands::Direct => {
+            run_direct_mode(&cli).await?;
         }
     }
 
@@ -56,7 +52,13 @@ async fn run_interactive_mode(cli: &Cli) -> Result<()> {
 
     // Create application state
     let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
-    let tree = traverser.traverse(&cli.root)?;
+    let mut tree = traverser.traverse(&cli.root)?;
+
+    // Apply include/exclude patterns if provided
+    if !cli.include.is_empty() || !cli.exclude.is_empty() {
+        apply_patterns(&mut tree, &cli.include, &cli.exclude);
+    }
+
     let mut app = App::new(tree);
 
     let event_handler = EventHandler::new();
@@ -126,21 +128,92 @@ async fn run_app<B: Backend>(
     Ok(())
 }
 
-async fn run_non_interactive_mode(cli: &Cli) -> Result<()> {
+
+async fn run_direct_mode(cli: &Cli) -> Result<()> {
     let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
-    let tree = traverser.traverse(&cli.root)?;
+    let mut tree = traverser.traverse(&cli.root)?;
+
+    // Apply include/exclude patterns to the tree
+    apply_patterns(&mut tree, &cli.include, &cli.exclude);
 
     generate_output(&tree, cli)?;
     Ok(())
 }
 
-async fn run_direct_mode(cli: &Cli, _include: &[String], _exclude: &[String]) -> Result<()> {
-    let traverser = DirectoryTraverser::new(cli.respect_gitignore, cli.max_file_size, cli.include_all);
-    let tree = traverser.traverse(&cli.root)?;
+fn apply_patterns(tree: &mut directory::tree::DirectoryTree, include: &[String], exclude: &[String]) {
+    use directory::state::SelectionState;
 
-    // TODO: Apply include/exclude patterns to the tree
-    generate_output(&tree, cli)?;
-    Ok(())
+    // If no include patterns are specified, include everything by default
+    let include_all = include.is_empty();
+
+    for i in 0..tree.nodes.len() {
+        if let Some(node) = tree.nodes.get(i) {
+            // Use relative path from the root for pattern matching
+            let relative_path = if let Some(root_node) = tree.nodes.get(tree.root_index) {
+                node.path.strip_prefix(&root_node.path).unwrap_or(&node.path).to_string_lossy()
+            } else {
+                node.path.to_string_lossy()
+            };
+
+            let mut should_include = include_all;
+
+            // Check include patterns
+            for pattern in include {
+                if path_matches_pattern(&relative_path, pattern) || path_matches_pattern(&node.name, pattern) {
+                    should_include = true;
+                    break;
+                }
+            }
+
+            // Check exclude patterns (these override includes)
+            for pattern in exclude {
+                if path_matches_pattern(&relative_path, pattern) || path_matches_pattern(&node.name, pattern) {
+                    should_include = false;
+                    break;
+                }
+            }
+
+            let new_state = if should_include {
+                SelectionState::Included
+            } else {
+                SelectionState::Excluded
+            };
+
+            tree.set_state(i, new_state);
+        }
+    }
+}
+
+fn path_matches_pattern(path: &str, pattern: &str) -> bool {
+    // Simple glob-like matching
+    if pattern == "**/*" {
+        return true;
+    }
+
+    // Handle common patterns
+    if pattern.ends_with("*") {
+        let prefix = &pattern[..pattern.len() - 1];
+        return path.starts_with(prefix);
+    }
+
+    if pattern.starts_with("*") {
+        let suffix = &pattern[1..];
+        return path.ends_with(suffix);
+    }
+
+    // Convert glob pattern to regex-like matching
+    let regex_pattern = pattern
+        .replace(".", "\\.")
+        .replace("**", ".*")
+        .replace("*", "[^/]*")
+        .replace("?", ".");
+
+    if let Ok(regex) = regex::Regex::new(&format!("^{}$", regex_pattern)) {
+        regex.is_match(path)
+    } else {
+        // Fallback to simple equality check
+        path == pattern
+    }
 }
 
 fn generate_output(tree: &directory::tree::DirectoryTree, cli: &Cli) -> Result<()> {

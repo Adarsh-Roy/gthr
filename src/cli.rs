@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "gthr")]
 #[command(about = "A CLI tool for directory text ingestion with fuzzy finder capabilities")]
-#[command(version = "0.1.0")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
@@ -14,23 +14,27 @@ pub struct Cli {
     pub root: PathBuf,
 
     /// Pre-include all files and directories
-    #[arg(short, long, conflicts_with = "exclude_all")]
+    #[arg(short = 'I', long = "include-all", conflicts_with = "exclude_all")]
     pub include_all: bool,
 
     /// Pre-exclude all files and directories (pick what to include)
-    #[arg(short, long, conflicts_with = "include_all")]
+    #[arg(short = 'E', long = "exclude-all", conflicts_with = "include_all")]
     pub exclude_all: bool,
+
+    /// Pattern to include files (glob pattern)
+    #[arg(short = 'i', long = "include")]
+    pub include: Vec<String>,
+
+    /// Pattern to exclude files (glob pattern)
+    #[arg(short = 'e', long = "exclude")]
+    pub exclude: Vec<String>,
 
     /// Output file path
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Skip interactive mode and use current selection
-    #[arg(long)]
-    pub non_interactive: bool,
-
     /// Respect .gitignore files
-    #[arg(long, default_value = "true")]
+    #[arg(long = "respect-gitignore", short = 'g', action = clap::ArgAction::Set, default_value = "true")]
     pub respect_gitignore: bool,
 
     /// Maximum file size to include (in bytes)
@@ -43,14 +47,7 @@ pub enum Commands {
     /// Run the interactive fuzzy finder interface
     Interactive,
     /// Generate text ingest directly without interaction
-    Direct {
-        /// Pattern to include files (glob pattern)
-        #[arg(long)]
-        include: Vec<String>,
-        /// Pattern to exclude files (glob pattern)
-        #[arg(long)]
-        exclude: Vec<String>,
-    },
+    Direct,
 }
 
 impl Default for Cli {
@@ -60,8 +57,9 @@ impl Default for Cli {
             root: PathBuf::from("."),
             include_all: false,
             exclude_all: false,
+            include: Vec::new(),
+            exclude: Vec::new(),
             output: None,
-            non_interactive: false,
             respect_gitignore: true,
             max_file_size: 1048576,
         }

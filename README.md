@@ -13,22 +13,15 @@ what to include or exclude using a modern terminal user interface.
   - 🟢 Green: Included files/directories
   - 🔴 Red: Excluded files/directories
   - 🟡 Yellow: Partially included (mixed children states)
-- **Multiple Modes**: Pre-include everything or start with everything excluded
+- **Two Modes**: Interactive mode with fuzzy finder or direct mode with pattern matching
 - **Smart File Detection**: Automatically identifies text files vs binary files
 - **Configurable**: Set max file size limit (default 1 MB), ignore or respect `.gitignore`
-- **Vim-like Controls**: Vim-like navigation support (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
+- **Pattern Matching**: Supports glob patterns for include/exclude (e.g., `*.rs`, `**/*`)
+- **Vim-like Controls**: Vim-like navigation (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
 
 ## Installation
 
 ### Homebrew
-
-```bash
-# Add the tap and install
-brew tap adarsh-roy/gthr
-brew install gthr
-```
-
-Or install directly:
 
 ```bash
 brew install adarsh-roy/gthr/gthr
@@ -62,42 +55,56 @@ By default, `gthr` runs in _Interactive Mode_.
 # Start interactive mode in current directory
 gthr
 
-# Start with all files pre-included
-gthr --include-all
+# Explicitly run interactive mode
+gthr interactive
 
-# Start with all files excluded (pick what to include, ths is the default)
-gthr --exclude-all
+# Start with all files pre-included
+gthr -I
+
+# Start with all files excluded (pick what to include, this is the default)
+gthr -E
 
 # Specify a different root directory
 gthr -r /path/to/directory
 
 # Save output to a file (it copies to clipboard regardless)
 gthr -o output.md
-```
 
-### Non-Interactive Mode
+# Ignore .gitignore files (include everything, even ignored files)
+gthr -g false
 
-```bash
-# Generate output immediately with current settings
-gthr --non-interactive --include-all -o output.md
+# Start interactive mode with patterns pre-applied
+gthr -i "*.rs" -e "target/*" interactive
 
-# Process specific directory
-gthr --non-interactive --include-all -r /path/to/project -o project_ingest.md
+# Complex example: include Rust files, exclude tests, ignore gitignore
+gthr -g false -i "*.rs" -e "*test*" -o rust_code.md interactive
 ```
 
 ### Direct Mode
 
-> [!WARNING]
-> This is a WIP.
+Generate output immediately without interactive interface using include/exclude patterns.
 
 ```bash
-# Use include/exclude patterns (TODO: Not implemented yet)
-gthr direct --include "*.rs" --exclude "target/*"
+# Include only Rust files
+gthr -i "*.rs" direct
+
+# Include multiple patterns
+gthr -i "*.rs" -i "*.toml" direct
+
+# Include with exclusions
+gthr -i "**/*" -e "target/*" -e "*.log" direct
+
+# Save to file with gitignore disabled
+gthr -g false -i "*.rs" -o output.md direct
+
+# Process specific directory
+gthr -r /path/to/project -i "src/**/*.rs" direct
+
+# Pre-include everything then exclude specific patterns
+gthr -I -e "target/*" -e "*.log" direct
 ```
 
 ## Interactive Controls
-
-Simple and intuitive - no modes to worry about!
 
 ### Search
 - `Type any character` - Directly adds to search (letters, numbers, symbols)
@@ -108,8 +115,6 @@ Simple and intuitive - no modes to worry about!
 - `↑/↓` - Move up/down through files
 - `←/→` - Alternative up/down navigation
 - `Ctrl+J/Ctrl+K` - Vim-like up/down navigation
-- `Page Up/Page Down` - Page navigation
-- `Home/End` - Go to top/bottom
 
 ### Selection
 - `Enter` - Toggle selection of current item (✓/✗)
@@ -127,23 +132,47 @@ Simple and intuitive - no modes to worry about!
 ## Command Line Options
 
 ```
-Options:
+Commands:
+  interactive  Run the interactive fuzzy finder interface (default)
+  direct       Generate text ingest directly without interaction
+  help         Print help information
+
+Global Options:
   -r, --root <ROOT>                    Root directory to process [default: .]
-  -i, --include-all                    Pre-include all files and directories
-  -e, --exclude-all                    Pre-exclude all files and directories
+  -I, --include-all                    Pre-include all files and directories
+  -E, --exclude-all                    Pre-exclude all files and directories
+  -i, --include <PATTERN>              Pattern to include files (glob pattern)
+  -e, --exclude <PATTERN>              Pattern to exclude files (glob pattern)
   -o, --output <OUTPUT>                Output file path
-      --non-interactive                Skip interactive mode and use current selection
-      --max-file-size <MAX_FILE_SIZE>  Maximum file size to include (in bytes) [default: 1048576]
+  -g, --respect-gitignore <BOOL>       Respect .gitignore files [default: true]
+      --max-file-size <SIZE>           Maximum file size to include (in bytes) [default: 1048576]
+  -h, --help                           Print help
+  -V, --version                        Print version
 ```
 
-## Advanced Usage
+## Usage examples
 
 ```bash
 # Exclude large files (limit to 512KB)
 gthr --max-file-size 524288
 
-# Quick non-interactive export
-gthr --non-interactive --include-all
+# Quick direct export of all Rust files, ignoring .gitignore
+gthr -g false -i "**/*.rs" -o rust_files.md direct
+
+# Include everything but exclude build artifacts
+gthr -i "**/*" -e "target/*" -e "node_modules/*" -e "*.log" direct
+
+# Process specific directory with custom file size limit
+gthr -r /path/to/project --max-file-size 2097152 -i "src/**/*" direct
+
+# Interactive mode with patterns: start with Rust files included, target excluded
+gthr -i "*.rs" -e "target/*" interactive
+
+# Include source files but exclude tests and builds
+gthr -I -e "*test*" -e "target/*" -e "build/*" -e "dist/*" direct
+
+# Multiple include patterns with exclusions
+gthr -i "*.rs" -i "*.toml" -i "*.md" -e "target/*" -o project_overview.md direct
 ```
 
 ## Contributing
@@ -162,9 +191,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ## Roadmap
 
-- [ ] Configuration file support (`.gthrrc`)
-- [ ] Custom include/exclude patterns (glob support, regex support in the search area)
-- [ ] Multiple output formats (JSON, plain text)
-- [ ] Preset configurations for different project types
+- [ ] Configuration file support (global and local)
+- [ ] Regex support in search bar in interactive mode
 - [ ] Performance optimizations for huge directories
 
