@@ -1,6 +1,6 @@
 # gthr
 
-A CLI tool for directory text ingestion, similar to gitingest web app, with fuzzy finder for including/excluding files.
+A CLI tool for gathering text context of a directory, similar to [gitingest](https://gitingest.com/) web app, with a fuzzy finder for including/excluding files and several other configuration options.
 
 <p align="center">
   <img src="./docs/gthr.png" alt="gthr"/>
