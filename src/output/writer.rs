@@ -1,4 +1,5 @@
 use super::formatter::OutputFormatter;
+use crate::config::settings::Settings;
 use crate::directory::tree::DirectoryTree;
 use anyhow::Result;
 use arboard::Clipboard;
@@ -46,11 +47,10 @@ impl OutputWriter {
         Ok(())
     }
 
-    pub fn write_to_clipboard_or_prompt(&self, tree: &DirectoryTree) -> Result<()> {
+    pub fn write_to_clipboard_or_prompt(&self, tree: &DirectoryTree, settings: &Settings) -> Result<()> {
         let content = self.formatter.format_output(tree)?;
-        const MAX_CLIPBOARD_SIZE: usize = 2 * 1024 * 1024; // 2MB
 
-        if content.len() <= MAX_CLIPBOARD_SIZE {
+        if content.len() <= settings.max_clipboard_size {
             match self.try_write_to_clipboard(&content) {
                 Ok(()) => {
                     println!("✓ Output copied to clipboard ({} bytes)", content.len());
@@ -64,7 +64,7 @@ impl OutputWriter {
         }
 
         // Either too large or clipboard failed - prompt for filename
-        self.prompt_and_save_to_file(tree, &content)
+        self.prompt_and_save_to_file(tree, &content, settings)
     }
 
     fn try_write_to_clipboard(&self, content: &str) -> Result<()> {
@@ -73,11 +73,12 @@ impl OutputWriter {
         Ok(())
     }
 
-    fn prompt_and_save_to_file(&self, tree: &DirectoryTree, content: &str) -> Result<()> {
-        if content.len() > 2 * 1024 * 1024 {
+    fn prompt_and_save_to_file(&self, tree: &DirectoryTree, content: &str, settings: &Settings) -> Result<()> {
+        if content.len() > settings.max_clipboard_size {
             println!(
-                "⚠ Output is too large for clipboard ({} bytes > 2MB)",
-                content.len()
+                "⚠ Output is too large for clipboard ({} bytes > {})",
+                content.len(),
+                settings.format_clipboard_size()
             );
         }
 

@@ -1,0 +1,37 @@
+# gthr Configuration File Sample
+#
+# Copy this file to one of these locations:
+#   Global:  ~/.config/.gthr.toml  (applies to all projects)
+#   Project: .gthr.toml            (overrides global for this project)
+#
+# Only specify the settings you want to change from defaults.
+
+# Maximum file size to include when traversing directories (in bytes)
+# Default: 2097152 (2MB)
+max_file_size = 2097152
+
+# Maximum size for clipboard operations (in bytes)
+# When output exceeds this size, you'll be prompted to save to a file instead
+# Default: 2097152 (2MB)
+max_clipboard_size = 2097152
+
+# Whether to respect .gitignore files by default
+# Default: true
+respect_gitignore = true
+
+# File extensions used for quick text file vs. binary file classification
+[file_extensions]
+
+# File extensions that should be treated as text files 
+text_extensions = [
+    "txt", "md", "rs", "py", "js", "ts", "jsx", "tsx",
+    "html", "css", "scss", "sass", "json", "yaml", "yml",
+    "toml", "xml", "csv", "sql", "sh", "bash", "zsh", "fish"
+]
+
+# File extensions that should be treated as binary files (excluded from content)
+binary_extensions = [
+    "exe", "dll", "so", "dylib", "bin", "obj", "o", "a",
+    "lib", "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg",
+    "pdf", "zip", "tar", "gz", "7z", "rar"
+]

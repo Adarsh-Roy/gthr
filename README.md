@@ -15,7 +15,8 @@ what to include or exclude using a modern terminal user interface.
   - 🟡 Yellow: Partially included (mixed children states)
 - **Two Modes**: Interactive mode with fuzzy finder or direct mode with pattern matching
 - **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Set max file size limit (default 1 MB), ignore or respect `.gitignore`
+- **Configurable**: Set max file size limit (default 2 MB), set clipboard size limit, ignore or respect `.gitignore`
+- **Two-Tier Configuration**: Global config (`~/.config/.gthr.toml`) with project-specific overrides (`.gthr.toml`)
 - **Pattern Matching**: Supports glob patterns for include/exclude (e.g., `*.rs`, `**/*`)
 - **Vim-like Controls**: Vim-like navigation (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
 
@@ -145,9 +146,90 @@ Global Options:
   -e, --exclude <PATTERN>              Pattern to exclude files (glob pattern)
   -o, --output <OUTPUT>                Output file path
   -g, --respect-gitignore <BOOL>       Respect .gitignore files [default: true]
-      --max-file-size <SIZE>           Maximum file size to include (in bytes) [default: 1048576]
+      --max-file-size <SIZE>           Maximum file size to include (in bytes) [default: 2097152]
   -h, --help                           Print help
   -V, --version                        Print version
+```
+
+## Configuration
+
+gthr supports a two-tier configuration system that allows you to set global defaults and override them on a per-project basis.
+
+### Configuration Files
+
+1. **Global Config**: `~/.config/.gthr.toml` (applies to all projects)
+2. **Project Config**: `.gthr.toml` in project root (overrides global settings)
+
+### Configuration Priority
+
+Settings are resolved in this order (highest to lowest priority):
+1. Command-line flags (highest priority)
+2. Project configuration (`.gthr.toml` in project root)
+3. Global configuration (`~/.config/.gthr.toml`)
+4. Built-in defaults (lowest priority)
+
+### Sample Configuration
+
+A complete sample configuration is available in [`config-sample.toml`](./.gthr.toml).
+
+Create `~/.config/.gthr.toml` for global settings:
+
+```toml
+# gthr Configuration File Sample
+#
+# Copy this file to one of these locations:
+#   Global:  ~/.config/.gthr.toml  (applies to all projects)
+#   Project: .gthr.toml            (overrides global for this project)
+#
+# Only specify the settings you want to change from defaults.
+
+# Maximum file size to include when traversing directories (in bytes)
+# Default: 2097152 (2MB)
+max_file_size = 2097152
+
+# Maximum size for clipboard operations (in bytes)
+# When output exceeds this size, you'll be prompted to save to a file instead
+# Default: 2097152 (2MB)
+max_clipboard_size = 2097152
+
+# Whether to respect .gitignore files by default
+# Default: true
+respect_gitignore = true
+
+# File extensions used for quick text file vs. binary file classification
+[file_extensions]
+
+# File extensions that should be treated as text files 
+text_extensions = [
+    "txt", "md", "rs", "py", "js", "ts", "jsx", "tsx",
+    "html", "css", "scss", "sass", "json", "yaml", "yml",
+    "toml", "xml", "csv", "sql", "sh", "bash", "zsh", "fish"
+]
+
+# File extensions that should be treated as binary files (excluded from content)
+binary_extensions = [
+    "exe", "dll", "so", "dylib", "bin", "obj", "o", "a",
+    "lib", "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg",
+    "pdf", "zip", "tar", "gz", "7z", "rar"
+]
+```
+
+### Project-Specific Configuration
+
+Create `.gthr.toml` in your project root to override global settings:
+
+```toml
+# Project-specific gthr configuration
+# Only specify settings you want to override
+
+# Example: Smaller clipboard limit for this project
+max_clipboard_size = 4096
+
+# Example: Different file size limit
+max_file_size = 1048576
+
+# Example: Don't respect .gitignore for this project
+# respect_gitignore = false
 ```
 
 ## Usage examples

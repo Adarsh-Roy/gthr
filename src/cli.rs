@@ -38,7 +38,7 @@ pub struct Cli {
     pub respect_gitignore: bool,
 
     /// Maximum file size to include (in bytes)
-    #[arg(long, default_value = "1048576")] // 1MB default
+    #[arg(long, default_value = "2097152")] // 2MB default
     pub max_file_size: u64,
 }
 
@@ -61,7 +61,7 @@ impl Default for Cli {
             exclude: Vec::new(),
             output: None,
             respect_gitignore: true,
-            max_file_size: 1048576,
+            max_file_size: 2097152,
         }
     }
 }
