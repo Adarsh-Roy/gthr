@@ -1,10 +1,10 @@
-use std::fs;
-use std::path::Path;
-use std::io::{self, Write};
+use super::formatter::OutputFormatter;
+use crate::directory::tree::DirectoryTree;
 use anyhow::Result;
 use arboard::Clipboard;
-use crate::directory::tree::DirectoryTree;
-use super::formatter::OutputFormatter;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 
 pub struct OutputWriter {
     formatter: OutputFormatter,
@@ -48,7 +48,7 @@ impl OutputWriter {
 
     pub fn write_to_clipboard_or_prompt(&self, tree: &DirectoryTree) -> Result<()> {
         let content = self.formatter.format_output(tree)?;
-        const MAX_CLIPBOARD_SIZE: usize = 1024 * 1024; // 1MB
+        const MAX_CLIPBOARD_SIZE: usize = 2 * 1024 * 1024; // 2MB
 
         if content.len() <= MAX_CLIPBOARD_SIZE {
             match self.try_write_to_clipboard(&content) {
@@ -74,11 +74,14 @@ impl OutputWriter {
     }
 
     fn prompt_and_save_to_file(&self, tree: &DirectoryTree, content: &str) -> Result<()> {
-        if content.len() > 1024 * 1024 {
-            println!("⚠ Output is too large for clipboard ({} bytes > 1MB)", content.len());
+        if content.len() > 2 * 1024 * 1024 {
+            println!(
+                "⚠ Output is too large for clipboard ({} bytes > 2MB)",
+                content.len()
+            );
         }
 
-        print!("📁 Enter filename to save output (or press Enter for default): ");
+        print!("Enter filename to save output (or press Enter for default): ");
         io::stdout().flush()?;
 
         let mut input = String::new();
@@ -117,8 +120,8 @@ impl OutputWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     #[test]
     fn test_generate_default_filename() {
@@ -130,3 +133,4 @@ mod tests {
         assert!(filename.contains("ingest"));
     }
 }
+

@@ -125,8 +125,8 @@ gthr -I -e "target/*" -e "*.log" direct
 - `Esc` - Clear search (or quit if search is empty)
 
 ### Output Behavior
-- **Default**: Copies output to clipboard (up to 1MB)
-- **Large files**: Prompts for filename if output exceeds 1MB
+- **Default**: Copies output to clipboard (up to 2MB)
+- **Large files**: Shows save dialog if output exceeds 2MB
 - **Manual save**: Use `-o filename.md` to save directly to file
 
 ## Command Line Options

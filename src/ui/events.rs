@@ -34,7 +34,21 @@ impl EventHandler {
     }
 }
 
-pub fn handle_key_event(key_event: KeyEvent) -> Option<AppAction> {
+pub fn handle_key_event(key_event: KeyEvent, mode: &crate::ui::app::AppMode) -> Option<AppAction> {
+    use crate::ui::app::AppMode;
+
+    // Handle file save mode differently
+    if *mode == AppMode::FileSave {
+        match key_event.code {
+            KeyCode::Esc => return Some(AppAction::Escape),
+            KeyCode::Enter => return Some(AppAction::FileSaveConfirm),
+            KeyCode::Backspace => return Some(AppAction::FileSaveBackspace),
+            KeyCode::Char(c) if key_event.modifiers == KeyModifiers::NONE => {
+                return Some(AppAction::FileSaveChar(c));
+            }
+            _ => return None,
+        }
+    }
     // Check for Ctrl combinations first
     if key_event.modifiers.contains(KeyModifiers::CONTROL) {
         match key_event.code {
@@ -83,6 +97,9 @@ pub enum AppAction {
     ShowHelp,
     SearchChar(char),
     SearchBackspace,
+    FileSaveChar(char),
+    FileSaveBackspace,
+    FileSaveConfirm,
 }
 
 impl Default for EventHandler {
