@@ -2,6 +2,10 @@
 
 A CLI tool for directory text ingestion, similar to gitingest web app, with fuzzy finder for including/excluding files.
 
+<p align="center">
+  <img src="./docs/gthr.png" alt="gthr"/>
+</p>
+
 ## Features
 
 - **Smart Output**: Markdown output with syntax highlighting. Automatically copies to clipboard when you export. Optionally saves to a file.
