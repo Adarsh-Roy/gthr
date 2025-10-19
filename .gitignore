@@ -3,7 +3,6 @@
 
 # Rust/Cargo
 /target/
-Cargo.lock
 
 # IDE/Editor files
 .vscode/
