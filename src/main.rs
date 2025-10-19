@@ -55,22 +55,7 @@ async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create application state
-    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
-        settings.max_file_size // Use config file value
-    } else {
-        cli.max_file_size // Use explicitly set CLI value
-    };
-    let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
-    let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
-    let traverser =
-        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
-    let mut tree = traverser.traverse(&cli.root)?;
-
-    // Apply include/exclude patterns if provided
-    if !cli.include.is_empty() || !cli.exclude.is_empty() {
-        apply_patterns(&mut tree, &cli.include, &cli.exclude);
-    }
-
+    let tree = build_directory_tree(cli, settings)?;
     let mut app = App::new(tree);
 
     let event_handler = EventHandler::new();
@@ -149,22 +134,35 @@ async fn run_app<B: Backend>(
 }
 
 async fn run_direct_mode(cli: &Cli, settings: &Settings) -> Result<()> {
-    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE { // If using default CLI value
+    let tree = build_directory_tree(cli, settings)?;
+    handle_output(&tree, cli, settings, false)?;
+    Ok(())
+}
+
+/// Build the directory tree with common logic for both modes
+fn build_directory_tree(cli: &Cli, settings: &Settings) -> Result<directory::tree::DirectoryTree> {
+    let max_file_size = if cli.max_file_size == DEFAULT_MAX_FILE_SIZE {
+        // If using default CLI value
         settings.max_file_size // Use config file value
     } else {
         cli.max_file_size // Use explicitly set CLI value
     };
     let respect_gitignore = cli.respect_gitignore.unwrap_or(settings.respect_gitignore);
     let show_hidden = cli.show_hidden.unwrap_or(settings.show_hidden);
-    let traverser =
-        DirectoryTraverser::new(respect_gitignore, show_hidden, max_file_size, cli.include_all);
+    let traverser = DirectoryTraverser::new(
+        respect_gitignore,
+        show_hidden,
+        max_file_size,
+        cli.include_all,
+    );
     let mut tree = traverser.traverse(&cli.root)?;
 
-    // Apply include/exclude patterns to the tree
-    apply_patterns(&mut tree, &cli.include, &cli.exclude);
+    // Apply include/exclude patterns if provided
+    if !cli.include.is_empty() || !cli.exclude.is_empty() {
+        apply_patterns(&mut tree, &cli.include, &cli.exclude);
+    }
 
-    handle_direct_output(&tree, cli, settings)?;
-    Ok(())
+    Ok(tree)
 }
 
 fn apply_patterns(
@@ -254,61 +252,76 @@ fn path_matches_pattern(path: &str, pattern: &str) -> bool {
     }
 }
 
-fn handle_export(app: &mut App, _cli: &Cli, settings: &Settings) -> Result<()> {
+enum OutputAction {
+    Quit,
+    StartFileSave(String),
+    Continue,
+}
+
+/// Unified output handler for both interactive and direct modes
+///
+/// Returns OutputAction to indicate what the caller should do
+fn handle_output(
+    tree: &directory::tree::DirectoryTree,
+    cli: &Cli,
+    settings: &Settings,
+    is_interactive: bool,
+) -> Result<OutputAction> {
+    // No output file specified, format the content
     let formatter = OutputFormatter::new()
         .with_metadata(false)
         .with_line_numbers(false);
+    let content = formatter.format_output(tree)?;
 
-    let content = formatter.format_output(&app.tree)?;
-
-    if content.len() <= settings.max_clipboard_size {
-        // Try clipboard first
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            if clipboard.set_text(&content).is_ok() {
-                println!("✓ Output copied to clipboard ({} bytes)", content.len());
-                app.quit();
-                return Ok(());
-            }
-        }
+    // Check if content is empty (no files included)
+    if content.trim().is_empty() {
+        println!("⚠ No content included. Please include at least one file.");
+        return Ok(OutputAction::Quit);
     }
 
-    // Either too large or clipboard failed - start file save dialog
-    app.start_file_save(content);
-    Ok(())
-}
-
-fn handle_direct_output(tree: &directory::tree::DirectoryTree, cli: &Cli, settings: &Settings) -> Result<()> {
+    // If -o flag is provided, write directly to file
     if let Some(output_path) = &cli.output {
-        let formatter = OutputFormatter::new()
-            .with_metadata(false)
-            .with_line_numbers(false);
         let writer = OutputWriter::new().with_formatter(formatter);
         writer.write_to_file(tree, output_path)?;
         println!("✓ Output written to: {}", output_path.display());
-    } else {
-        let formatter = OutputFormatter::new()
-            .with_metadata(false)
-            .with_line_numbers(false);
-        let content = formatter.format_output(tree)?;
-
-        if content.len() <= settings.max_clipboard_size {
-            // Try clipboard first
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if clipboard.set_text(&content).is_ok() {
-                    println!("✓ Output copied to clipboard ({} bytes)", content.len());
-                    return Ok(());
-                }
-            }
-        }
-
-        // Either too large or clipboard failed - use text prompt
-        save_file_with_text_prompt(tree, &content, settings)?;
+        return Ok(OutputAction::Quit);
     }
 
+    // Try clipboard if content is small enough
+    if content.len() <= settings.max_clipboard_size {
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            if clipboard.set_text(&content).is_ok() {
+                println!("✓ Output copied to clipboard ({} bytes)", content.len());
+                return Ok(OutputAction::Quit);
+            }
+        }
+    }
+
+    // Clipboard failed or content too large
+    if is_interactive {
+        // Interactive mode: start file save dialog
+        Ok(OutputAction::StartFileSave(content))
+    } else {
+        // Direct mode: use text prompt
+        save_file_with_text_prompt(tree, &content, settings)?;
+        Ok(OutputAction::Continue)
+    }
+}
+
+fn handle_export(app: &mut App, cli: &Cli, settings: &Settings) -> Result<()> {
+    match handle_output(&app.tree, cli, settings, true)? {
+        OutputAction::Quit => app.quit(),
+        OutputAction::StartFileSave(content) => app.start_file_save(content),
+        OutputAction::Continue => {}
+    }
     Ok(())
 }
 
-fn save_file_with_text_prompt(tree: &directory::tree::DirectoryTree, content: &str, settings: &Settings) -> Result<()> {
+fn save_file_with_text_prompt(
+    tree: &directory::tree::DirectoryTree,
+    content: &str,
+    settings: &Settings,
+) -> Result<()> {
     use std::fs;
     use std::io::{self, Write};
     use std::path::Path;
@@ -379,4 +392,3 @@ fn save_file_from_dialog(app: &App, content: &str) -> Result<()> {
     println!("✓ Output saved to: {}", path.display());
     Ok(())
 }
-

@@ -1,10 +1,10 @@
+use crate::constants::DEFAULT_MAX_FILE_SIZE;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use crate::constants::DEFAULT_MAX_FILE_SIZE;
 
 #[derive(Parser)]
 #[command(name = "gthr")]
-#[command(about = "A CLI tool for directory text ingestion with fuzzy finder capabilities")]
+#[command(about = "A CLI tool for directory text ingestion")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
