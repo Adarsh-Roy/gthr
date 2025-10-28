@@ -1,6 +1,33 @@
 use crate::directory::tree::{DirectoryTree, FileNode};
 use anyhow::Result;
+use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
+
+// A simple recursive structure to hold the file tree
+struct TreeNode {
+    children: BTreeMap<String, TreeNode>,
+}
+
+impl TreeNode {
+    fn new() -> Self {
+        Self {
+            children: BTreeMap::new(),
+        }
+    }
+
+    fn insert(&mut self, path: &Path) {
+        let mut current_node = self;
+        for component in path.components() {
+            let component_str = component.as_os_str().to_string_lossy().to_string();
+            current_node = current_node
+                .children
+                .entry(component_str)
+                .or_insert_with(TreeNode::new);
+        }
+    }
+}
+
 
 pub struct OutputFormatter {
     include_metadata: bool,
@@ -35,6 +62,14 @@ impl OutputFormatter {
         let included_files = tree.get_all_included_files();
         let mut output = String::new();
 
+        // Prepend the tree structure for selected files.
+        let tree_string = self.format_tree_structure(tree, &included_files)?;
+        if !tree_string.is_empty() {
+            output.push_str("```\n");
+            output.push_str(&tree_string);
+            output.push_str("```\n\n");
+        }
+
         if self.include_metadata {
             // Add header
             output.push_str(&self.format_header(tree, &included_files)?);
@@ -49,6 +84,29 @@ impl OutputFormatter {
             output.push_str(&self.format_file(tree, file_node)?);
         }
 
+        Ok(output)
+    }
+
+    fn format_tree_structure(
+        &self,
+        tree: &DirectoryTree,
+        included_files: &[&FileNode],
+    ) -> Result<String> {
+        if included_files.is_empty() {
+            return Ok(String::new());
+        }
+
+        let root_path = &tree.nodes[tree.root_index].path;
+        let mut root_node = TreeNode::new();
+
+        for file_node in included_files {
+            let relative_path = file_node.path.strip_prefix(root_path).unwrap_or(&file_node.path);
+            root_node.insert(relative_path);
+        }
+
+        let mut output = String::new();
+        output.push_str(".\n");
+        build_tree_string_recursive(&root_node, "", &mut output);
         Ok(output)
     }
 
@@ -166,6 +224,20 @@ impl OutputFormatter {
         }
 
         Ok(output)
+    }
+}
+
+fn build_tree_string_recursive(node: &TreeNode, prefix: &str, output: &mut String) {
+    let mut entries = node.children.iter().peekable();
+    while let Some((name, child_node)) = entries.next() {
+        let is_last = entries.peek().is_none();
+        let connector = if is_last { "└── " } else { "├── " };
+        output.push_str(&format!("{}{}{}\n", prefix, connector, name));
+
+        if !child_node.children.is_empty() {
+            let new_prefix = if is_last { "    " } else { "│   " };
+            build_tree_string_recursive(child_node, &format!("{}{}", prefix, new_prefix), output);
+        }
     }
 }
 
