@@ -49,14 +49,20 @@ pub fn handle_key_event(key_event: KeyEvent, mode: &crate::ui::app::AppMode) -> 
             _ => return None,
         }
     }
-    // Check for Ctrl combinations first
+    // Check for Ctrl combinations
     if key_event.modifiers.contains(KeyModifiers::CONTROL) {
         match key_event.code {
-            KeyCode::Char('e') => return Some(AppAction::Export),  // Ctrl+E for export output
-            KeyCode::Char('h') => return Some(AppAction::ShowHelp),  // Ctrl+H for help
-            KeyCode::Char('j') => return Some(AppAction::MoveDown),  // Ctrl+J for moving down
-            KeyCode::Char('k') => return Some(AppAction::MoveUp),  // Ctrl+K for moving up
-            _ => return None,  // Ignore other Ctrl combinations
+            KeyCode::Char('e') => return Some(AppAction::Export),
+            KeyCode::Char('h') => return Some(AppAction::ShowHelp),
+            KeyCode::Char('j') => return Some(AppAction::MoveDown),
+            KeyCode::Char('k') => return Some(AppAction::MoveUp),
+            KeyCode::Char('d') => return Some(AppAction::HalfPageDown),
+            KeyCode::Char('u') => return Some(AppAction::HalfPageUp),
+            KeyCode::Char('f') => return Some(AppAction::PageDown),
+            KeyCode::Char('b') => return Some(AppAction::PageUp),
+            KeyCode::Char('t') => return Some(AppAction::MoveToTop),
+            KeyCode::Char('g') => return Some(AppAction::MoveToBottom),
+            _ => return None,
         }
     }
 
@@ -66,16 +72,8 @@ pub fn handle_key_event(key_event: KeyEvent, mode: &crate::ui::app::AppMode) -> 
         KeyCode::Enter => Some(AppAction::ToggleSelection),
         KeyCode::Backspace => Some(AppAction::SearchBackspace),
 
-        // Arrow keys for navigation
         KeyCode::Up => Some(AppAction::MoveUp),
         KeyCode::Down => Some(AppAction::MoveDown),
-        KeyCode::Left => Some(AppAction::MoveUp),
-        KeyCode::Right => Some(AppAction::MoveDown),
-        KeyCode::PageUp => Some(AppAction::PageUp),
-        KeyCode::PageDown => Some(AppAction::PageDown),
-        KeyCode::Home => Some(AppAction::MoveToTop),
-        KeyCode::End => Some(AppAction::MoveToBottom),
-
         // Characters type into search (only if no modifiers)
         KeyCode::Char(c) if key_event.modifiers == KeyModifiers::NONE => Some(AppAction::SearchChar(c)),
 
@@ -89,6 +87,8 @@ pub enum AppAction {
     ToggleSelection,
     MoveUp,
     MoveDown,
+    HalfPageUp,
+    HalfPageDown,
     PageUp,
     PageDown,
     MoveToTop,

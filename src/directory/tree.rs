@@ -1,5 +1,5 @@
 use super::state::SelectionState;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Read;
@@ -69,6 +69,8 @@ impl DirectoryTree {
         path: PathBuf,
         is_directory: bool,
         parent_path: &Path,
+        extra_text_ext: &HashSet<String>,
+        exclude_text_ext: &HashSet<String>,
     ) -> Option<usize> {
         if self.path_to_index.contains_key(&path) {
             return self.path_to_index.get(&path).copied();
@@ -81,13 +83,41 @@ impl DirectoryTree {
 
         // Determine if it's a text file
         if !is_directory {
-            node.is_text_file = is_text_file(&path);
+            node.is_text_file = is_text_file(&path, extra_text_ext, exclude_text_ext);
         }
 
         self.nodes.push(node);
         self.path_to_index.insert(path, node_index);
 
         // Add this node as a child to its parent
+        self.nodes[parent_index].add_child(node_index);
+
+        Some(node_index)
+    }
+
+    pub fn add_node_from_scan_entry(
+        &mut self,
+        path: PathBuf,
+        is_directory: bool,
+        parent_path: &Path,
+        is_text: bool,
+        file_size: Option<u64>,
+        initial_state: SelectionState,
+    ) -> Option<usize> {
+        if self.path_to_index.contains_key(&path) {
+            return self.path_to_index.get(&path).copied();
+        }
+
+        let parent_index = self.path_to_index.get(parent_path).copied()?;
+        let node_index = self.nodes.len();
+
+        let mut node = FileNode::new(path.clone(), is_directory, Some(parent_index));
+        node.is_text_file = is_text;
+        node.size = file_size;
+        node.state = initial_state;
+
+        self.nodes.push(node);
+        self.path_to_index.insert(path, node_index);
         self.nodes[parent_index].add_child(node_index);
 
         Some(node_index)
@@ -200,7 +230,21 @@ impl DirectoryTree {
     }
 }
 
-fn is_text_file(path: &Path) -> bool {
+pub(crate) fn is_text_file(
+    path: &Path,
+    extra_text_ext: &HashSet<String>,
+    exclude_text_ext: &HashSet<String>,
+) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext_lower = ext.to_string_lossy().to_lowercase();
+        if exclude_text_ext.contains(&ext_lower) {
+            return false;
+        }
+        if extra_text_ext.contains(&ext_lower) {
+            return true;
+        }
+    }
+
     // Quick extension-based check for common text file extensions
     if is_text_by_extension(path) {
         return true;
@@ -293,61 +337,63 @@ fn is_text_by_content(path: &Path) -> bool {
 }
 
 fn is_likely_text(buffer: &[u8]) -> bool {
-    // Check for null bytes (strong indicator of binary content)
     if buffer.contains(&0) {
         return false;
     }
 
-    // Count printable ASCII and UTF-8 characters
-    let mut printable_count = 0;
-    let mut i = 0;
-
-    while i < buffer.len() {
-        let byte = buffer[i];
-
-        // ASCII printable characters and common whitespace
-        if (byte >= 32 && byte <= 126) || byte == b'\n' || byte == b'\r' || byte == b'\t' {
-            printable_count += 1;
-            i += 1;
-        }
-        // Check for valid UTF-8 sequences
-        else if byte >= 0x80 {
-            if let Some(utf8_len) = get_utf8_char_length(byte) {
-                if i + utf8_len <= buffer.len() {
-                    let utf8_slice = &buffer[i..i + utf8_len];
-                    if std::str::from_utf8(utf8_slice).is_ok() {
-                        printable_count += utf8_len;
-                        i += utf8_len;
-                    } else {
-                        i += 1; // Skip invalid UTF-8
-                    }
-                } else {
-                    i += 1; // Not enough bytes for complete UTF-8 character
-                }
-            } else {
-                i += 1; // Invalid UTF-8 start byte
-            }
-        } else {
-            i += 1; // Non-printable ASCII
-        }
+    // If valid UTF-8, check that most characters are printable
+    if let Ok(text) = std::str::from_utf8(buffer) {
+        let total = text.len();
+        let printable = text.bytes().filter(|&b| {
+            (32..=126).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t' || b >= 0x80
+        }).count();
+        return (printable as f64 / total as f64) >= 0.95;
     }
 
-    // If more than 95% of characters are printable, consider it text
-    let text_ratio = printable_count as f64 / buffer.len() as f64;
-    text_ratio >= 0.95
+    // Not valid UTF-8 — check if mostly printable ASCII
+    let printable = buffer.iter().filter(|&&b| {
+        (32..=126).contains(&b) || b == b'\n' || b == b'\r' || b == b'\t'
+    }).count();
+    (printable as f64 / buffer.len() as f64) >= 0.95
 }
 
-fn get_utf8_char_length(first_byte: u8) -> Option<usize> {
-    if first_byte & 0x80 == 0 {
-        Some(1) // ASCII
-    } else if first_byte & 0xE0 == 0xC0 {
-        Some(2) // 2-byte UTF-8
-    } else if first_byte & 0xF0 == 0xE0 {
-        Some(3) // 3-byte UTF-8
-    } else if first_byte & 0xF8 == 0xF0 {
-        Some(4) // 4-byte UTF-8
-    } else {
-        None // Invalid UTF-8 start byte
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_extra_ext_detected_as_text() {
+        let extra: HashSet<String> = ["xyz"].iter().map(|s| s.to_string()).collect();
+        let exclude: HashSet<String> = HashSet::new();
+        let path = Path::new("test.xyz");
+        assert!(is_text_file(path, &extra, &exclude));
+    }
+
+    #[test]
+    fn test_exclude_ext_overrides_builtin() {
+        let extra: HashSet<String> = HashSet::new();
+        let exclude: HashSet<String> = ["rs"].iter().map(|s| s.to_string()).collect();
+        let path = Path::new("main.rs");
+        assert!(!is_text_file(path, &extra, &exclude));
+    }
+
+    #[test]
+    fn test_exclude_wins_over_extra() {
+        let extra: HashSet<String> = ["xyz"].iter().map(|s| s.to_string()).collect();
+        let exclude: HashSet<String> = ["xyz"].iter().map(|s| s.to_string()).collect();
+        let path = Path::new("test.xyz");
+        assert!(!is_text_file(path, &extra, &exclude));
+    }
+
+    #[test]
+    fn test_empty_sets_preserve_existing_behavior() {
+        let extra: HashSet<String> = HashSet::new();
+        let exclude: HashSet<String> = HashSet::new();
+        // .rs is in the hardcoded list
+        assert!(is_text_file(Path::new("main.rs"), &extra, &exclude));
+        // .xyz is not in the hardcoded list and has no content to check
+        assert!(!is_text_file(Path::new("test.xyz"), &extra, &exclude));
     }
 }
 

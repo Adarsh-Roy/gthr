@@ -1,31 +1,5 @@
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 
-pub struct FuzzySearch {
-    matcher: SkimMatcherV2,
-}
-
-impl Default for FuzzySearch {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl FuzzySearch {
-    pub fn new() -> Self {
-        Self {
-            matcher: SkimMatcherV2::default(),
-        }
-    }
-
-    pub fn search(&self, query: &str, text: &str) -> Option<(i64, Vec<usize>)> {
-        self.matcher.fuzzy_indices(text, query)
-    }
-
-    pub fn search_score(&self, query: &str, text: &str) -> Option<i64> {
-        self.matcher.fuzzy_match(text, query)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct MatchResult {
     pub score: i64,
@@ -57,17 +31,16 @@ where
             .collect();
     }
 
-    let fuzzy_search = FuzzySearch::new();
+    let matcher = SkimMatcherV2::default();
     let mut results = Vec::new();
 
     for (index, item) in items.iter().enumerate() {
         let text = extract_text(item);
-        if let Some((score, indices)) = fuzzy_search.search(query, text) {
+        if let Some((score, indices)) = matcher.fuzzy_indices(text, query) {
             results.push(MatchResult::new(score, indices, index));
         }
     }
 
-    // Sort by score (descending)
     results.sort_by(|a, b| b.score.cmp(&a.score));
     results
 }
@@ -78,9 +51,9 @@ mod tests {
 
     #[test]
     fn test_fuzzy_search() {
-        let fuzzy = FuzzySearch::new();
+        let matcher = SkimMatcherV2::default();
 
-        let result = fuzzy.search("rs", "main.rs");
+        let result = matcher.fuzzy_indices("main.rs", "rs");
         assert!(result.is_some());
 
         let (score, indices) = result.unwrap();

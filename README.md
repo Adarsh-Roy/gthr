@@ -1,26 +1,10 @@
 # gthr
 
-A CLI tool for gathering text context of a directory, similar to [gitingest](https://gitingest.com/) web app, with a fuzzy finder for including/excluding files and several other configuration options.
+Gathers text content from a directory tree into clipboard or file. Local alternative to [gitingest](https://gitingest.com/) with a fuzzy-finding TUI.
 
 <p align="center">
   <img src="./docs/gthr.png" alt="gthr"/>
 </p>
-
-## Features
-
-- **Smart Output**: Markdown output with syntax highlighting. Automatically copies to clipboard when you export. Optionally saves to a file.
-- **Interactive Fuzzy Finder**: Browse and search through files with a responsive TUI
-- **Hierarchical Selection**: Including/excluding directories affects all children
-- **Color-coded Feedback**:
-  - 🟢 Green: Included files/directories
-  - 🔴 Red: Excluded files/directories
-  - 🟡 Yellow: Partially included (mixed children states)
-- **Two Modes**: Interactive mode with fuzzy finder or direct mode with pattern matching
-- **Smart File Detection**: Automatically identifies text files vs binary files
-- **Configurable**: Control file size limits, clipboard limits, gitignore behavior, and hidden file visibility
-- **Two-Tier Configuration**: Global config (`~/.config/.gthr.toml`) with project-specific overrides (`.gthr.toml`)
-- **Pattern Matching**: Supports glob patterns for include/exclude (e.g., `*.rs`, `**/*`)
-- **Vim-like Controls**: Vim-like navigation (`Ctrl+J`/`Ctrl-K`) alongside arrow keys
 
 ## Installation
 
@@ -30,9 +14,9 @@ A CLI tool for gathering text context of a directory, similar to [gitingest](htt
 brew install adarsh-roy/gthr/gthr
 ```
 
-### Build From Source
+### Build from source
 
-**NOTE**: You must have `cargo` installed.
+Requires `cargo`:
 
 ```bash
 cargo install --git https://github.com/Adarsh-Roy/gthr --locked
@@ -40,150 +24,138 @@ cargo install --git https://github.com/Adarsh-Roy/gthr --locked
 
 ## Usage
 
-### Quick Start
-
 ```bash
-# Interactive mode (default)
+# Interactive mode (default) — all files start excluded
 gthr
 
-# Interactive mode with all files pre-included
+# Pre-include everything, then deselect what you don't need
 gthr -I
 
-# Direct mode - include only Rust files
+# Direct mode — include only Rust files, output immediately
 gthr -i "*.rs" direct
 
-# Show hidden files
-gthr -H true
+# Include specific paths (files or directories)
+gthr -p src/lib.rs -p tests/ direct
 
-# Ignore .gitignore files
-gthr -g false
+# Save to file instead of clipboard
+gthr -o output.md
 ```
 
-For all available options, use:
-```bash
-gthr --help
-```
+### Modes
 
-### Interactive mode controls
+**Interactive** (default): Browse the file tree in a TUI, fuzzy-search, and toggle files before exporting.
 
-**Search**
-- Type any character - Adds to search
-- `Backspace` - Delete search character
-- `Esc` - Clear search (or quit if search is empty)
+**Direct** (`gthr direct`): Applies `-i`/`-e`/`-p` flags and outputs without opening the TUI.
 
-**Navigation**
-- `↑/↓` or `←/→` - Move through files
-- `Ctrl+J/Ctrl+K` - Vim-like navigation
+### Interactive controls
 
-**Selection**
-- `Enter` - Toggle selection (✓/✗)
+| Action | Keys |
+|---|---|
+| Search | Type any character |
+| Clear search / quit | `Esc` |
+| Navigate | `↑`/`↓`, `Ctrl+J`/`Ctrl+K` |
+| Half-page | `Ctrl+D`/`Ctrl+U` |
+| Full-page | `Ctrl+F`/`Ctrl+B` |
+| Jump to top/bottom | `Ctrl+T`/`Ctrl+G` |
+| Toggle selection | `Enter` |
+| Export and quit | `Ctrl+E` |
+| Help | `Ctrl+H` |
 
-**Actions**
-- `Ctrl+E` - Export and quit
-- `Ctrl+H` - Show help
-- `Esc` - Clear search or quit
+### Output behavior
 
-### Output Behavior
-- **Default**: Copies to clipboard (up to clipboard limit)
-- **Large output**: Shows save dialog if total size exceeds clipboard limit
-- **Manual save**: Use `-o filename.md` flag
+- Copies to clipboard by default (up to `max_clipboard_size`).
+- If output exceeds the clipboard limit, prompts to save to a file.
+- Use `-o <path>` to write directly to a file.
 
-## Configuration
-
-gthr supports a two-tier configuration system with global defaults and per-project overrides.
-
-### Configuration Files
-
-1. **Global Config**: `~/.config/.gthr.toml` (applies to all projects)
-2. **Project Config**: `.gthr.toml` in project root (overrides global)
-
-### Configuration Priority
-
-Settings are resolved in order (highest to lowest priority):
-1. Command-line flags
-2. Project configuration (`.gthr.toml`)
-3. Global configuration (`~/.config/.gthr.toml`)
-4. Built-in defaults
-
-### Sample Configuration
-
-```toml
-# Maximum file size to include when traversing directories (in bytes)
-# Default: 2097152 (2MB)
-max_file_size = 2097152
-
-# Maximum size for clipboard operations (in bytes)
-# Default: 2097152 (2MB)
-max_clipboard_size = 2097152
-
-# Whether to respect .gitignore files by default
-# Default: true
-respect_gitignore = true
-
-# Whether to show hidden files and directories (starting with .)
-# Default: false
-show_hidden = false
-```
-
-A complete sample is available in [`.gthr.toml`](./.gthr.toml).
-
-## Command Line Options
+## CLI reference
 
 ```
-Commands:
-  interactive  Run the interactive fuzzy finder interface (default)
-  direct       Generate text ingest directly without interaction
-
 Options:
   -r, --root <ROOT>                Root directory [default: .]
   -I, --include-all                Pre-include all files
-  -E, --exclude-all                Pre-exclude all files (default)
-  -i, --include <PATTERN>          Include pattern (glob)
-  -e, --exclude <PATTERN>          Exclude pattern (glob)
-  -o, --output <OUTPUT>            Output file path
+  -i, --include <PATTERN>          Include glob pattern (repeatable)
+  -e, --exclude <PATTERN>          Exclude glob pattern (repeatable)
+  -p, --path <PATH>                Explicit file/directory paths (repeatable)
+  -o, --output <PATH>              Write output to file
   -g, --respect-gitignore <BOOL>   Respect .gitignore [default: true]
-  -H, --show-hidden <BOOL>         Show hidden files [default: false]
-      --max-file-size <SIZE>       Max file size in bytes [default: 2097152]
+  -H, --show-hidden <BOOL>         Show dotfiles [default: false]
+      --max-file-size <BYTES>      Skip files larger than this [default: 2097152]
   -h, --help                       Print help
   -V, --version                    Print version
+
+Commands:
+  interactive  TUI fuzzy finder (default)
+  direct       Output without interaction
 ```
+
+## Configuration
+
+A config file is auto-created at `~/.config/gthr.toml` on first run. Respects `XDG_CONFIG_HOME`.
+
+**Priority** (highest wins): CLI flags > config file > built-in defaults.
+
+### Config options
+
+| Key | Default | Description |
+|---|---|---|
+| `max_file_size` | `2097152` (2 MB) | Skip files larger than this (bytes) |
+| `max_clipboard_size` | `2097152` (2 MB) | Trigger file-save prompt above this size |
+| `respect_gitignore` | `true` | Honor `.gitignore` rules during traversal |
+| `show_hidden` | `false` | Include dotfiles and dot-directories |
+| `extra_text_extensions` | `[]` | Extensions to always treat as text (e.g. `["mdx", "astro"]`) |
+| `exclude_text_extensions` | `[]` | Extensions to never treat as text (e.g. `["min.js", "log"]`) |
+
+### Text file detection overrides
+
+gthr decides whether a file is "text" using ~60 hardcoded extensions plus content-based heuristics (UTF-8 check, null-byte detection). If a file isn't recognized or is wrongly classified, override it in config:
+
+```toml
+# Treat .prisma and .mdx as text
+extra_text_extensions = ["prisma", "mdx"]
+
+# Never treat .log or .min.js as text, even though they'd pass heuristics
+exclude_text_extensions = ["log", "min.js"]
+```
+
+`exclude_text_extensions` takes priority. If an extension appears in both lists, it's excluded.
+
+Extensions are case-insensitive and leading dots are stripped (`.RS`, `rs`, and `.rs` all match).
+
+## Limitations
+
+- **No regex in the TUI search bar** — fuzzy matching only. Glob patterns work in direct mode via `-i`/`-e`.
+- **Binary files are excluded from output** — only files detected as text are included. Use `extra_text_extensions` if something is missed.
+- **Clipboard may silently fail** — on headless systems or broken clipboard backends, output is lost. Use `-o` to be safe.
+- **Large directories** — scanning happens in a background thread with streaming updates, but very large trees (100k+ files) will take time to fully load in interactive mode.
+- **Config is global only** — no per-project config files. Use CLI flags for project-specific overrides.
 
 ## Examples
 
 ```bash
-# Include everything, show hidden files, ignore .gitignore
+# Everything, including hidden files, ignoring .gitignore
 gthr -I -H true -g false
 
-# Direct mode - only Rust and TOML files
+# Only Rust and TOML files, direct output
 gthr -i "*.rs" -i "*.toml" direct
 
 # Exclude build artifacts
 gthr -I -e "target/*" -e "node_modules/*" direct
 
-# Custom file size limit
-gthr --max-file-size 5242880
+# Include a specific file and a whole directory
+gthr -p src/lib.rs -p tests/ direct
 
-# Save to file
-gthr -o output.md
+# Larger file size limit (5 MB)
+gthr --max-file-size 5242880
 ```
 
 ## Contributing
 
-Contributions are welcome! Please submit issues, feature requests, or pull requests.
+Issues, feature requests, and pull requests are welcome.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+MIT — see [LICENSE](./LICENSE).
 
-## Similar Tools
+## Similar tools
 
-- [gitingest](https://gitingest.com/) - Web-based repository ingestion
-  - gthr adds interactive TUI with fuzzy matching
-  - gthr supports clipboard output for quick pasting
-
-## Roadmap
-
-- [ ] Regex support in search bar in interactive mode
-- [ ] Keyboard shortcuts for settings in interactive mode
-- [ ] Performance optimizations for large directories
-- [ ] Gather text context directly from github repository link
+- [gitingest](https://gitingest.com/) — web-based repository ingestion. gthr runs locally with a TUI and clipboard output.

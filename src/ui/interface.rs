@@ -7,7 +7,8 @@ use ratatui::{
 
 use crate::directory::state::SelectionState;
 use crate::fuzzy::filter::get_node_display_path;
-use crate::ui::app::{App, AppMode};
+use crate::output::formatter::format_file_size;
+use crate::ui::app::{App, AppMode, ScanState};
 
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let size = f.size();
@@ -35,6 +36,7 @@ fn draw_main_interface(f: &mut Frame, app: &mut App, area: Rect) {
     draw_search_bar(f, app, chunks[0]);
     draw_file_list(f, app, chunks[1]);
     draw_status_bar(f, app, chunks[2]);
+    draw_notification(f, app, chunks[1]);
 }
 
 fn draw_search_bar(f: &mut Frame, app: &App, area: Rect) {
@@ -98,7 +100,7 @@ fn draw_file_list(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(list, area);
 }
 
-fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem {
+fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem<'_> {
     if let Some(node) = app.tree.get_node(tree_index) {
         let display_path = get_node_display_path(&app.tree, tree_index);
 
@@ -145,30 +147,21 @@ fn create_list_item(app: &App, tree_index: usize, is_selected: bool) -> ListItem
 fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let stats = app.get_stats();
 
+    let scan_indicator = match &app.scan_state {
+        ScanState::Scanning => format!(" [Scanning... {} found]", app.tree.nodes.len()),
+        ScanState::Error(msg) => format!(" [Error: {}]", msg),
+        ScanState::Complete => String::new(),
+    };
+
     let left_text = format!(
-        "Files: {}/{} | Size: {} | Filtered: {}",
+        "  Files: {}/{} | Size: {}{}",
         stats.included_files,
         stats.total_files,
         stats.format_size(),
-        stats.filtered_count
+        scan_indicator,
     );
 
-    // Adjust help text based on available width
-    let available_width = area.width.saturating_sub(4) as usize; // Account for borders
-    let left_text_len = left_text.len();
-    let remaining_width = available_width.saturating_sub(left_text_len);
-
-    let right_text = if remaining_width > 80 {
-        "↑/↓: Move | Enter: Toggle ✓/✗ | Ctrl+E: Export | Ctrl+H: Help"
-    } else if remaining_width > 60 {
-        "↑/↓: Move | Enter: Toggle | Ctrl+E: Export | Ctrl+H: Help"
-    } else if remaining_width > 40 {
-        "↑/↓: Move | Ctrl+E: Export | Ctrl+H: Help"
-    } else if remaining_width > 25 {
-        "↑/↓: Move | Ctrl+E: Export"
-    } else {
-        "Ctrl+E: Export"
-    };
+    let right_text = "Ctrl+H: Help  ";
 
     let status_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -201,21 +194,25 @@ fn draw_help_interface(f: &mut Frame, app: &App, area: Rect) {
         Line::from("gthr - Help"),
         Line::from(""),
         Line::from("Search:"),
-        Line::from("  Type       Add any character to search (letters, numbers, symbols)"),
-        Line::from("  Backspace  Delete search character"),
-        Line::from("  Esc        Clear search text (or quit if empty)"),
+        Line::from("  Type             Add any character to search (letters, numbers, symbols)"),
+        Line::from("  Backspace        Delete search character"),
+        Line::from("  Esc              Clear search text (or quit if empty)"),
         Line::from(""),
         Line::from("Navigation:"),
-        Line::from("  ↑/↓        Move up/down"),
-        Line::from("  ←/→        Move up/down (alternative)"),
+        Line::from("  ↑/↓              Move up/down"),
+        Line::from("  Ctrl+K/Ctrl+J    Move up/down (alternative)"),
+        Line::from("  Ctrl+D/Ctrl+U    Half-page down/up"),
+        Line::from("  Ctrl+F/Ctrl+B    Full-page down/up"),
+        Line::from("  Ctrl+T           Jump to first item"),
+        Line::from("  Ctrl+G           Jump to last item"),
         Line::from(""),
         Line::from("Selection:"),
-        Line::from("  Enter      Toggle ✓ included / ✗ excluded"),
+        Line::from("  Enter            Toggle ✓ included / ✗ excluded"),
         Line::from(""),
         Line::from("Actions:"),
-        Line::from("  Ctrl+E     Export output and quit"),
-        Line::from("  Ctrl+H     Show this help"),
-        Line::from("  Esc        Clear search (or quit if search empty)"),
+        Line::from("  Ctrl+E           Export output and quit"),
+        Line::from("  Ctrl+H           Show help"),
+        Line::from("  Esc              Clear search bar (or quit if search bar is empty)"),
         Line::from(""),
         Line::from("Colors:"),
         Line::from(vec![
@@ -268,6 +265,45 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn draw_notification(f: &mut Frame, app: &mut App, file_list_area: Rect) {
+    use ratatui::style::Color;
+    use std::time::Duration;
+
+    let (msg, created) = match &app.notification {
+        Some(n) => n,
+        None => return,
+    };
+
+    if created.elapsed() > Duration::from_secs(3) {
+        app.notification = None;
+        return;
+    }
+
+    let text_width = msg.len() as u16 + 4; // 2 border + 2 padding
+    // Fit within the file list area's borders (inset by 1 on each side)
+    let max_width = file_list_area.width.saturating_sub(2);
+    let width = text_width.min(max_width);
+    let height = 3u16;
+
+    // Top-right corner inside the file list area border
+    let x = file_list_area.right().saturating_sub(width + 1);
+    let y = file_list_area.y + 1;
+    let notification_area = Rect::new(x, y, width, height);
+
+    let warning_border = ratatui::style::Style::default().fg(Color::Yellow);
+
+    let notification = Paragraph::new(msg.as_str())
+        .style(app.color_scheme.text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(warning_border),
+        );
+
+    f.render_widget(Clear, notification_area);
+    f.render_widget(notification, notification_area);
 }
 
 fn draw_file_save_dialog(f: &mut Frame, app: &App, area: Rect) {
@@ -344,22 +380,5 @@ fn draw_file_save_dialog(f: &mut Frame, app: &App, area: Rect) {
             popup_chunks[1].x + app.file_save_input.len() as u16 + 1,
             popup_chunks[1].y + 1,
         );
-    }
-}
-
-fn format_file_size(size: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut size_f = size as f64;
-    let mut unit_index = 0;
-
-    while size_f >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size_f /= 1024.0;
-        unit_index += 1;
-    }
-
-    if unit_index == 0 {
-        format!("{} {}", size, UNITS[unit_index])
-    } else {
-        format!("{:.1} {}", size_f, UNITS[unit_index])
     }
 }

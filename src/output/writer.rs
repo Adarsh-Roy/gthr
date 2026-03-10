@@ -1,10 +1,7 @@
 use super::formatter::OutputFormatter;
-use crate::config::settings::Settings;
 use crate::directory::tree::DirectoryTree;
 use anyhow::Result;
-use arboard::Clipboard;
 use std::fs;
-use std::io::{self, Write};
 use std::path::Path;
 
 pub struct OutputWriter {
@@ -41,71 +38,6 @@ impl OutputWriter {
         Ok(())
     }
 
-    pub fn write_to_stdout(&self, tree: &DirectoryTree) -> Result<()> {
-        let content = self.formatter.format_output(tree)?;
-        print!("{}", content);
-        Ok(())
-    }
-
-    pub fn write_to_clipboard_or_prompt(&self, tree: &DirectoryTree, settings: &Settings) -> Result<()> {
-        let content = self.formatter.format_output(tree)?;
-
-        if content.len() <= settings.max_clipboard_size {
-            match self.try_write_to_clipboard(&content) {
-                Ok(()) => {
-                    println!("✓ Output copied to clipboard ({} bytes)", content.len());
-                    return Ok(());
-                }
-                Err(e) => {
-                    eprintln!("⚠ Failed to copy to clipboard: {}", e);
-                    eprintln!("Falling back to file prompt...");
-                }
-            }
-        }
-
-        // Either too large or clipboard failed - prompt for filename
-        self.prompt_and_save_to_file(tree, &content, settings)
-    }
-
-    fn try_write_to_clipboard(&self, content: &str) -> Result<()> {
-        let mut clipboard = Clipboard::new()?;
-        clipboard.set_text(content)?;
-        Ok(())
-    }
-
-    fn prompt_and_save_to_file(&self, tree: &DirectoryTree, content: &str, settings: &Settings) -> Result<()> {
-        if content.len() > settings.max_clipboard_size {
-            println!(
-                "⚠ Output is too large for clipboard ({} bytes > {})",
-                content.len(),
-                settings.format_clipboard_size()
-            );
-        }
-
-        print!("Enter filename to save output (or press Enter for default): ");
-        io::stdout().flush()?;
-
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        let filename = if input.is_empty() {
-            Self::generate_default_filename(tree)
-        } else {
-            // Add .md extension if not present
-            if input.ends_with(".md") {
-                input.to_string()
-            } else {
-                format!("{}.md", input)
-            }
-        };
-
-        let path = Path::new(&filename);
-        self.write_to_file(tree, path)?;
-        println!("✓ Output saved to: {}", path.display());
-        Ok(())
-    }
-
     pub fn generate_default_filename(tree: &DirectoryTree) -> String {
         let root_name = tree.nodes[tree.root_index]
             .path
@@ -113,15 +45,45 @@ impl OutputWriter {
             .unwrap_or_else(|| std::ffi::OsStr::new("directory"))
             .to_string_lossy();
 
-        let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-        format!("{}_ingest_{}.md", root_name, timestamp)
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let secs_per_day = 86400;
+        let secs_per_hour = 3600;
+        let secs_per_min = 60;
+        let total_days = now / secs_per_day;
+        let time_of_day = now % secs_per_day;
+        let hour = time_of_day / secs_per_hour;
+        let minute = (time_of_day % secs_per_hour) / secs_per_min;
+        let second = time_of_day % secs_per_min;
+
+        // Compute year/month/day from days since epoch
+        let (year, month, day) = {
+            // Shift to March-based year to simplify leap year handling
+            let days = total_days + 719468; // days from 0000-03-01 to 1970-01-01
+            let era = days / 146097;
+            let doe = days - era * 146097;
+            let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+            let y = yoe + era * 400;
+            let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            let mp = (5 * doy + 2) / 153;
+            let d = doy - (153 * mp + 2) / 5 + 1;
+            let m = if mp < 10 { mp + 3 } else { mp - 9 };
+            let y = if m <= 2 { y + 1 } else { y };
+            (y, m, d)
+        };
+
+        format!(
+            "{}_ingest_{}{:02}{:02}_{:02}{:02}{:02}.md",
+            root_name, year, month, day, hour, minute, second
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[test]

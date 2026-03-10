@@ -1,7 +1,19 @@
+use std::sync::mpsc::Receiver;
+use std::thread::JoinHandle;
+use std::time::Instant;
+use crate::output::formatter::format_file_size;
 use crate::directory::state::SelectionState;
+use crate::directory::traversal::ScanMessage;
 use crate::directory::tree::DirectoryTree;
 use crate::fuzzy::filter::{FilteredResults, filter_tree_nodes};
 use crate::ui::colors::ColorScheme;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScanState {
+    Scanning,
+    Complete,
+    Error(String),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
@@ -22,6 +34,12 @@ pub struct App {
     pub viewport_height: usize,
     pub file_save_input: String,
     pub pending_content: Option<String>,
+    pub scan_state: ScanState,
+    pub scan_receiver: Option<Receiver<ScanMessage>>,
+    pub scan_handle: Option<JoinHandle<()>>,
+    pub initial_state: SelectionState,
+    pub notification: Option<(String, Instant)>,
+    last_filter_update: Option<Instant>,
 }
 
 impl App {
@@ -35,13 +53,114 @@ impl App {
             mode: AppMode::Main,
             color_scheme: ColorScheme::default(),
             should_quit: false,
-            viewport_height: 20, // Default, will be updated by UI
+            viewport_height: 20,
             file_save_input: String::new(),
             pending_content: None,
+            scan_state: ScanState::Complete,
+            scan_receiver: None,
+            scan_handle: None,
+            initial_state: SelectionState::Excluded,
+            notification: None,
+            last_filter_update: None,
         };
 
         app.update_filtered_results();
         app
+    }
+
+    pub fn new_streaming(
+        root_path: std::path::PathBuf,
+        receiver: Receiver<ScanMessage>,
+        handle: JoinHandle<()>,
+        initial_state: SelectionState,
+    ) -> Self {
+        let mut tree = DirectoryTree::new(root_path);
+        tree.set_state(tree.root_index, initial_state);
+
+        Self {
+            filtered_results: FilteredResults::new(),
+            tree,
+            selected_index: 0,
+            scroll_offset: 0,
+            search_query: String::new(),
+            mode: AppMode::Main,
+            color_scheme: ColorScheme::default(),
+            should_quit: false,
+            viewport_height: 20,
+            file_save_input: String::new(),
+            pending_content: None,
+            scan_state: ScanState::Scanning,
+            scan_receiver: Some(receiver),
+            scan_handle: Some(handle),
+            initial_state,
+            notification: None,
+            last_filter_update: None,
+        }
+    }
+
+    pub fn drain_scan_entries(&mut self) -> bool {
+        let receiver = match &self.scan_receiver {
+            Some(rx) => rx,
+            None => return false,
+        };
+
+        let mut added_any = false;
+        let mut scan_finished = false;
+
+        loop {
+            match receiver.try_recv() {
+                Ok(ScanMessage::Entry(entry)) => {
+                    self.tree.add_node_from_scan_entry(
+                        entry.path,
+                        entry.is_directory,
+                        &entry.parent_path,
+                        entry.is_text_file,
+                        entry.file_size,
+                        self.initial_state,
+                    );
+                    added_any = true;
+                }
+                Ok(ScanMessage::Complete) => {
+                    self.scan_state = ScanState::Complete;
+                    scan_finished = true;
+                    break;
+                }
+                Ok(ScanMessage::Error(msg)) => {
+                    self.scan_state = ScanState::Error(msg);
+                    scan_finished = true;
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.scan_state = ScanState::Complete;
+                    scan_finished = true;
+                    break;
+                }
+            }
+        }
+
+        if added_any {
+            // Always rebuild on scan completion; throttle to every 200ms while scanning
+            let should_rebuild = if scan_finished {
+                true
+            } else {
+                match self.last_filter_update {
+                    None => true,
+                    Some(last) => last.elapsed().as_millis() >= 200,
+                }
+            };
+
+            if should_rebuild {
+                self.update_filtered_results();
+                self.last_filter_update = Some(Instant::now());
+            }
+        }
+
+        added_any
+    }
+
+    pub fn is_scanning(&self) -> bool {
+        self.scan_state == ScanState::Scanning
     }
 
     pub fn update_filtered_results(&mut self) {
@@ -71,6 +190,28 @@ impl App {
         if self.selected_index + 1 < self.filtered_results.len() {
             self.selected_index += 1;
             self.update_scroll_for_move_down();
+        }
+    }
+
+    pub fn half_page_up(&mut self) {
+        let half_page = self.viewport_height / 2;
+        let old_index = self.selected_index;
+        self.selected_index = self.selected_index.saturating_sub(half_page);
+
+        if old_index != self.selected_index {
+            self.scroll_offset = self.scroll_offset.saturating_sub(half_page);
+        }
+    }
+
+    pub fn half_page_down(&mut self) {
+        let half_page = self.viewport_height / 2;
+        let old_index = self.selected_index;
+        self.selected_index =
+            (self.selected_index + half_page).min(self.filtered_results.len().saturating_sub(1));
+
+        if old_index != self.selected_index {
+            let max_scroll = self.filtered_results.len().saturating_sub(self.viewport_height);
+            self.scroll_offset = (self.scroll_offset + half_page).min(max_scroll);
         }
     }
 
@@ -155,24 +296,6 @@ impl App {
             .copied()
     }
 
-    pub fn select_all(&mut self) {
-        for &tree_index in &self.filtered_results.visible_items {
-            self.tree.set_state(tree_index, SelectionState::Included);
-        }
-    }
-
-    pub fn select_none(&mut self) {
-        for &tree_index in &self.filtered_results.visible_items {
-            self.tree.set_state(tree_index, SelectionState::Excluded);
-        }
-    }
-
-    pub fn invert_selection(&mut self) {
-        for &tree_index in &self.filtered_results.visible_items {
-            self.tree.toggle_state(tree_index);
-        }
-    }
-
     pub fn add_search_char(&mut self, c: char) {
         self.search_query.push(c);
         self.update_filtered_results();
@@ -180,11 +303,6 @@ impl App {
 
     pub fn search_backspace(&mut self) {
         self.search_query.pop();
-        self.update_filtered_results();
-    }
-
-    pub fn clear_search(&mut self) {
-        self.search_query.clear();
         self.update_filtered_results();
     }
 
@@ -231,7 +349,15 @@ impl App {
         }
     }
 
+    pub fn set_notification(&mut self, msg: String) {
+        self.notification = Some((msg, Instant::now()));
+    }
+
     pub fn get_stats(&self) -> AppStats {
+        let included_nodes = self.tree.get_all_included_files();
+        let included_files = included_nodes.len();
+        let total_size: u64 = included_nodes.iter().filter_map(|n| n.size).sum();
+
         let total_files = self
             .tree
             .nodes
@@ -239,20 +365,10 @@ impl App {
             .filter(|node| !node.is_directory && node.is_text_file)
             .count();
 
-        let included_files = self.tree.get_all_included_files().len();
-
-        let total_size: u64 = self
-            .tree
-            .get_all_included_files()
-            .iter()
-            .filter_map(|node| node.size)
-            .sum();
-
         AppStats {
             total_files,
             included_files,
             total_size,
-            filtered_count: self.filtered_results.len(),
         }
     }
 }
@@ -262,7 +378,6 @@ pub struct AppStats {
     pub total_files: usize,
     pub included_files: usize,
     pub total_size: u64,
-    pub filtered_count: usize,
 }
 
 impl AppStats {
@@ -271,19 +386,3 @@ impl AppStats {
     }
 }
 
-fn format_file_size(size: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut size_f = size as f64;
-    let mut unit_index = 0;
-
-    while size_f >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size_f /= 1024.0;
-        unit_index += 1;
-    }
-
-    if unit_index == 0 {
-        format!("{} {}", size, UNITS[unit_index])
-    } else {
-        format!("{:.1} {}", size_f, UNITS[unit_index])
-    }
-}

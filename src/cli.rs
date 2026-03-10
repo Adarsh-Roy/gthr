@@ -15,12 +15,8 @@ pub struct Cli {
     pub root: PathBuf,
 
     /// Pre-include all files and directories
-    #[arg(short = 'I', long = "include-all", conflicts_with = "exclude_all")]
+    #[arg(short = 'I', long = "include-all")]
     pub include_all: bool,
-
-    /// Pre-exclude all files and directories (pick what to include)
-    #[arg(short = 'E', long = "exclude-all", conflicts_with = "include_all")]
-    pub exclude_all: bool,
 
     /// Pattern to include files (glob pattern)
     #[arg(short = 'i', long = "include")]
@@ -29,6 +25,10 @@ pub struct Cli {
     /// Pattern to exclude files (glob pattern)
     #[arg(short = 'e', long = "exclude")]
     pub exclude: Vec<String>,
+
+    /// Explicit file/directory paths to include directly
+    #[arg(short = 'p', long = "path")]
+    pub paths: Vec<PathBuf>,
 
     /// Output file path
     #[arg(short, long)]
@@ -61,9 +61,9 @@ impl Default for Cli {
             command: Some(Commands::Interactive),
             root: PathBuf::from("."),
             include_all: false,
-            exclude_all: false,
             include: Vec::new(),
             exclude: Vec::new(),
+            paths: Vec::new(),
             output: None,
             respect_gitignore: None,
             show_hidden: None,

@@ -1,31 +1,61 @@
-use std::path::Path;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
+use std::thread::{self, JoinHandle};
 use anyhow::Result;
 use ignore::WalkBuilder;
-use super::tree::DirectoryTree;
+use ignore::overrides::Override as IgnoreOverride;
+use super::tree::{DirectoryTree, is_text_file};
 use super::state::SelectionState;
+
+#[derive(Debug)]
+pub struct ScanEntry {
+    pub path: PathBuf,
+    pub is_directory: bool,
+    pub parent_path: PathBuf,
+    pub is_text_file: bool,
+    pub file_size: Option<u64>,
+}
+
+#[derive(Debug)]
+pub enum ScanMessage {
+    Entry(ScanEntry),
+    Complete,
+    Error(String),
+}
 
 pub struct DirectoryTraverser {
     respect_gitignore: bool,
     show_hidden: bool,
     max_file_size: u64,
     include_all: bool,
+    extra_text_ext: HashSet<String>,
+    exclude_text_ext: HashSet<String>,
 }
 
 impl DirectoryTraverser {
-    pub fn new(respect_gitignore: bool, show_hidden: bool, max_file_size: u64, include_all: bool) -> Self {
+    pub fn new(
+        respect_gitignore: bool,
+        show_hidden: bool,
+        max_file_size: u64,
+        include_all: bool,
+        extra_text_ext: HashSet<String>,
+        exclude_text_ext: HashSet<String>,
+    ) -> Self {
         Self {
             respect_gitignore,
             show_hidden,
             max_file_size,
             include_all,
+            extra_text_ext,
+            exclude_text_ext,
         }
     }
 
-    pub fn traverse(&self, root_path: &Path) -> Result<DirectoryTree> {
+    pub fn traverse(&self, root_path: &Path, overrides: Option<IgnoreOverride>) -> Result<DirectoryTree> {
         let mut tree = DirectoryTree::new(root_path.to_path_buf());
 
-        // Set initial state for root
-        let initial_state = if self.include_all {
+        let initial_state = if overrides.is_some() || self.include_all {
             SelectionState::Included
         } else {
             SelectionState::Excluded
@@ -34,60 +64,53 @@ impl DirectoryTraverser {
 
         let mut builder = WalkBuilder::new(root_path);
 
-        // Configure the walker based on our settings
         if !self.respect_gitignore {
             builder.git_ignore(false)
                    .git_global(false)
                    .git_exclude(false);
         }
 
-        // Configure hidden files visibility
         builder.hidden(!self.show_hidden);
 
-        // Build the walker and iterate
+        if let Some(ov) = overrides {
+            builder.overrides(ov);
+        }
+
         let walker = builder.build();
 
         for result in walker {
             let entry = match result {
                 Ok(entry) => entry,
-                Err(_) => continue, // Skip entries we can't read
+                Err(_) => continue,
             };
 
             let path = entry.path();
 
             if path == root_path {
-                continue; // Skip root as it's already added
+                continue;
             }
 
-            // Apply our custom filtering
-            if !self.should_include_entry_by_path(path) {
+            if !should_include_entry_by_path(path, self.show_hidden) {
                 continue;
             }
 
             let is_directory = entry.file_type().map_or(false, |ft| ft.is_dir());
             let parent_path = path.parent().unwrap_or(root_path);
 
-            // Check file size before adding to tree
             if !is_directory {
                 if let Ok(metadata) = std::fs::metadata(path) {
                     if metadata.len() > self.max_file_size {
-                        // Skip files that are too large
                         continue;
                     }
-                }
-            }
 
-            if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path) {
-                // Set file size for files
-                if !is_directory {
-                    if let Ok(metadata) = std::fs::metadata(path) {
+                    if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path, &self.extra_text_ext, &self.exclude_text_ext) {
                         if let Some(node) = tree.get_node_mut(node_index) {
                             node.size = Some(metadata.len());
                         }
+                        tree.set_state(node_index, initial_state);
                     }
                 }
-
-                // Set initial state
+            } else if let Some(node_index) = tree.add_node(path.to_path_buf(), is_directory, parent_path, &self.extra_text_ext, &self.exclude_text_ext) {
                 tree.set_state(node_index, initial_state);
             }
         }
@@ -95,28 +118,98 @@ impl DirectoryTraverser {
         Ok(tree)
     }
 
-    fn should_include_entry_by_path(&self, path: &Path) -> bool {
-        // Skip hidden files and directories unless show_hidden is enabled
-        if !self.show_hidden {
-            if let Some(name) = path.file_name() {
-                let name_str = name.to_string_lossy();
-                if name_str.starts_with('.') && name_str != "." && name_str != ".." {
-                    // Allow some common config files
-                    if !matches!(
-                        name_str.as_ref(),
-                        ".gitignore" | ".gitattributes" | ".editorconfig" | ".env" | ".env.example"
-                    ) {
-                        return false;
+    pub fn traverse_streaming(&self, root_path: &Path) -> (Receiver<ScanMessage>, JoinHandle<()>) {
+        let (tx, rx) = mpsc::channel::<ScanMessage>();
+        let root_path = root_path.to_path_buf();
+        let respect_gitignore = self.respect_gitignore;
+        let show_hidden = self.show_hidden;
+        let max_file_size = self.max_file_size;
+        let extra_text_ext = self.extra_text_ext.clone();
+        let exclude_text_ext = self.exclude_text_ext.clone();
+
+        let handle = thread::spawn(move || {
+            let mut builder = WalkBuilder::new(&root_path);
+
+            if !respect_gitignore {
+                builder.git_ignore(false)
+                       .git_global(false)
+                       .git_exclude(false);
+            }
+            builder.hidden(!show_hidden);
+
+            let walker = builder.build();
+
+            for result in walker {
+                let entry = match result {
+                    Ok(entry) => entry,
+                    Err(_) => continue,
+                };
+
+                let path = entry.path();
+
+                if path == root_path {
+                    continue;
+                }
+
+                if !should_include_entry_by_path(path, show_hidden) {
+                    continue;
+                }
+
+                let is_directory = entry.file_type().map_or(false, |ft| ft.is_dir());
+
+                let (file_size, is_text) = if is_directory {
+                    (None, false)
+                } else {
+                    match std::fs::metadata(path) {
+                        Ok(metadata) => {
+                            let size = metadata.len();
+                            if size > max_file_size {
+                                continue;
+                            }
+                            (Some(size), is_text_file(path, &extra_text_ext, &exclude_text_ext))
+                        }
+                        Err(_) => continue,
                     }
+                };
+
+                let parent_path = path.parent().unwrap_or(&root_path).to_path_buf();
+
+                let scan_entry = ScanEntry {
+                    path: path.to_path_buf(),
+                    is_directory,
+                    parent_path,
+                    is_text_file: is_text,
+                    file_size,
+                };
+
+                if tx.send(ScanMessage::Entry(scan_entry)).is_err() {
+                    return;
+                }
+            }
+
+            let _ = tx.send(ScanMessage::Complete);
+        });
+
+        (rx, handle)
+    }
+}
+
+fn should_include_entry_by_path(path: &Path, show_hidden: bool) -> bool {
+    if !show_hidden {
+        if let Some(name) = path.file_name() {
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with('.') && name_str != "." && name_str != ".." {
+                if !matches!(
+                    name_str.as_ref(),
+                    ".gitignore" | ".gitattributes" | ".editorconfig" | ".env" | ".env.example"
+                ) {
+                    return false;
                 }
             }
         }
-
-        // Note: gitignore filtering is now handled by the ignore crate's WalkBuilder
-        // File size filtering is handled in the main loop
-
-        true
     }
+
+    true
 }
 
 #[cfg(test)]
@@ -137,8 +230,8 @@ mod tests {
         fs::create_dir(root_path.join("target"))?;
         fs::write(root_path.join("target").join("debug"), "binary")?;
 
-        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false);
-        let tree = traverser.traverse(root_path)?;
+        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false, HashSet::new(), HashSet::new());
+        let tree = traverser.traverse(root_path, None)?;
 
         assert!(tree.nodes.len() >= 3); // root, src, main.rs, README.md
 
