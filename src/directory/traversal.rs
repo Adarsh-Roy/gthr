@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use anyhow::Result;
+use globset::GlobSet;
 use ignore::WalkBuilder;
 use ignore::overrides::Override as IgnoreOverride;
 use super::tree::{DirectoryTree, is_text_file};
@@ -31,6 +32,7 @@ pub struct DirectoryTraverser {
     include_all: bool,
     extra_text_ext: HashSet<String>,
     exclude_text_ext: HashSet<String>,
+    hide_globset: Option<GlobSet>,
 }
 
 impl DirectoryTraverser {
@@ -41,6 +43,7 @@ impl DirectoryTraverser {
         include_all: bool,
         extra_text_ext: HashSet<String>,
         exclude_text_ext: HashSet<String>,
+        hide_globset: Option<GlobSet>,
     ) -> Self {
         Self {
             respect_gitignore,
@@ -49,6 +52,7 @@ impl DirectoryTraverser {
             include_all,
             extra_text_ext,
             exclude_text_ext,
+            hide_globset,
         }
     }
 
@@ -74,6 +78,20 @@ impl DirectoryTraverser {
 
         if let Some(ov) = overrides {
             builder.overrides(ov);
+        }
+
+        if let Some(ref hide_set) = self.hide_globset {
+            let root = root_path.to_path_buf();
+            let hide = hide_set.clone();
+            builder.filter_entry(move |entry| {
+                let path = entry.path();
+                if path == root.as_path() {
+                    return true;
+                }
+                let relative = path.strip_prefix(&root).unwrap_or(path);
+                let name = entry.file_name().to_string_lossy();
+                !hide.is_match(relative) && !hide.is_match(name.as_ref())
+            });
         }
 
         let walker = builder.build();
@@ -126,6 +144,7 @@ impl DirectoryTraverser {
         let max_file_size = self.max_file_size;
         let extra_text_ext = self.extra_text_ext.clone();
         let exclude_text_ext = self.exclude_text_ext.clone();
+        let hide_globset = self.hide_globset.clone();
 
         let handle = thread::spawn(move || {
             let mut builder = WalkBuilder::new(&root_path);
@@ -136,6 +155,20 @@ impl DirectoryTraverser {
                        .git_exclude(false);
             }
             builder.hidden(!show_hidden);
+
+            if let Some(ref hide_set) = hide_globset {
+                let root = root_path.clone();
+                let hide = hide_set.clone();
+                builder.filter_entry(move |entry| {
+                    let path = entry.path();
+                    if path == root.as_path() {
+                        return true;
+                    }
+                    let relative = path.strip_prefix(&root).unwrap_or(path);
+                    let name = entry.file_name().to_string_lossy();
+                    !hide.is_match(relative) && !hide.is_match(name.as_ref())
+                });
+            }
 
             let walker = builder.build();
 
@@ -230,10 +263,63 @@ mod tests {
         fs::create_dir(root_path.join("target"))?;
         fs::write(root_path.join("target").join("debug"), "binary")?;
 
-        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false, HashSet::new(), HashSet::new());
+        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false, HashSet::new(), HashSet::new(), None);
         let tree = traverser.traverse(root_path, None)?;
 
         assert!(tree.nodes.len() >= 3); // root, src, main.rs, README.md
+
+        Ok(())
+    }
+
+    fn build_test_globset(patterns: &[&str]) -> Option<GlobSet> {
+        use globset::GlobSetBuilder;
+        let mut builder = GlobSetBuilder::new();
+        for p in patterns {
+            builder.add(globset::Glob::new(p).unwrap());
+        }
+        Some(builder.build().unwrap())
+    }
+
+    #[test]
+    fn test_hide_globset_skips_matching_files() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let root_path = temp_dir.path();
+
+        fs::create_dir(root_path.join("src"))?;
+        fs::write(root_path.join("src").join("main.rs"), "fn main() {}")?;
+        fs::write(root_path.join("README.md"), "# Test")?;
+        fs::write(root_path.join("debug.log"), "log content")?;
+
+        let hide = build_test_globset(&["*.log"]);
+        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false, HashSet::new(), HashSet::new(), hide);
+        let tree = traverser.traverse(root_path, None)?;
+
+        let paths: Vec<String> = tree.nodes.iter().map(|n| n.name.clone()).collect();
+        assert!(!paths.contains(&"debug.log".to_string()));
+        assert!(paths.contains(&"main.rs".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_hide_globset_prevents_directory_descent() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let root_path = temp_dir.path();
+
+        fs::create_dir_all(root_path.join("target").join("debug"))?;
+        fs::write(root_path.join("target").join("debug").join("binary"), "bin")?;
+        fs::create_dir(root_path.join("src"))?;
+        fs::write(root_path.join("src").join("main.rs"), "fn main() {}")?;
+
+        let hide = build_test_globset(&["target"]);
+        let traverser = DirectoryTraverser::new(true, false, 1024 * 1024, false, HashSet::new(), HashSet::new(), hide);
+        let tree = traverser.traverse(root_path, None)?;
+
+        let paths: Vec<String> = tree.nodes.iter().map(|n| n.name.clone()).collect();
+        assert!(!paths.contains(&"target".to_string()));
+        assert!(!paths.contains(&"debug".to_string()));
+        assert!(!paths.contains(&"binary".to_string()));
+        assert!(paths.contains(&"main.rs".to_string()));
 
         Ok(())
     }

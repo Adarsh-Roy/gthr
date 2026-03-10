@@ -6,7 +6,7 @@ use gthr::config::settings::Settings;
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let settings = Settings::load();
+    let settings = Settings::load_with_local(&cli.root);
 
     match cli.command.as_ref().unwrap_or(&Commands::Interactive) {
         Commands::Interactive => gthr::run_interactive_mode(&cli, &settings).await?,

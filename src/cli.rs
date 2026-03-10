@@ -26,6 +26,10 @@ pub struct Cli {
     #[arg(short = 'e', long = "exclude")]
     pub exclude: Vec<String>,
 
+    /// Glob patterns to remove from the tree (repeatable)
+    #[arg(long = "hide-pattern")]
+    pub hide: Vec<String>,
+
     /// Explicit file/directory paths to include directly
     #[arg(short = 'p', long = "path")]
     pub paths: Vec<PathBuf>,
@@ -63,6 +67,7 @@ impl Default for Cli {
             include_all: false,
             include: Vec::new(),
             exclude: Vec::new(),
+            hide: Vec::new(),
             paths: Vec::new(),
             output: None,
             respect_gitignore: None,

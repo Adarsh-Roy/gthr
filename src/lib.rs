@@ -34,6 +34,23 @@ use ui::app::{App, AppMode, ScanState};
 use ui::events::{AppAction, AppEvent, EventHandler, handle_key_event};
 use ui::interface::draw_ui;
 
+fn effective_patterns<'a>(cli_patterns: &'a [String], config_patterns: &'a [String]) -> &'a [String] {
+    if !cli_patterns.is_empty() { cli_patterns } else { config_patterns }
+}
+
+fn build_hide_globset(patterns: &[String]) -> Option<globset::GlobSet> {
+    if patterns.is_empty() {
+        return None;
+    }
+    let mut builder = globset::GlobSetBuilder::new();
+    for p in patterns {
+        if let Ok(glob) = globset::Glob::new(p) {
+            builder.add(glob);
+        }
+    }
+    builder.build().ok()
+}
+
 pub async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
@@ -57,6 +74,8 @@ pub async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> 
     };
 
     let (extra_text_ext, exclude_text_ext) = settings.text_extension_overrides();
+    let eff_hide = effective_patterns(&cli.hide, &settings.hide_patterns);
+    let hide_globset = build_hide_globset(eff_hide);
     let traverser = DirectoryTraverser::new(
         respect_gitignore,
         show_hidden,
@@ -64,6 +83,7 @@ pub async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> 
         cli.include_all,
         extra_text_ext,
         exclude_text_ext,
+        hide_globset,
     );
     let (rx, handle) = traverser.traverse_streaming(&cli.root);
 
@@ -106,8 +126,10 @@ async fn run_app<B: Backend>(
         app.drain_scan_entries();
 
         if !patterns_applied && app.scan_state == ScanState::Complete {
-            if !cli.include.is_empty() || !cli.exclude.is_empty() {
-                apply_patterns(&mut app.tree, &cli.include, &cli.exclude);
+            let eff_include = effective_patterns(&cli.include, &settings.include_patterns);
+            let eff_exclude = effective_patterns(&cli.exclude, &settings.exclude_patterns);
+            if !eff_include.is_empty() || !eff_exclude.is_empty() {
+                apply_patterns(&mut app.tree, eff_include, eff_exclude);
                 app.update_filtered_results();
             }
 
@@ -191,8 +213,13 @@ pub fn build_directory_tree(
 
     let (extra_text_ext, exclude_text_ext) = settings.text_extension_overrides();
 
-    // Fast path: only -p, no -i/-e/-I
-    if cli.include.is_empty() && cli.exclude.is_empty() && !cli.paths.is_empty() && !cli.include_all {
+    let eff_include = effective_patterns(&cli.include, &settings.include_patterns);
+    let eff_exclude = effective_patterns(&cli.exclude, &settings.exclude_patterns);
+    let eff_hide = effective_patterns(&cli.hide, &settings.hide_patterns);
+    let hide_globset = build_hide_globset(eff_hide);
+
+    // Fast path: only -p, no -i/-e/-I and no config patterns
+    if eff_include.is_empty() && eff_exclude.is_empty() && !cli.paths.is_empty() && !cli.include_all {
         return Ok(build_tree_from_paths(
             &cli.root,
             &cli.paths,
@@ -211,14 +238,15 @@ pub fn build_directory_tree(
         cli.include_all,
         extra_text_ext.clone(),
         exclude_text_ext.clone(),
+        hide_globset,
     );
 
-    let overrides = if !cli.include.is_empty() || !cli.exclude.is_empty() {
+    let overrides = if !eff_include.is_empty() || !eff_exclude.is_empty() {
         let mut ob = OverrideBuilder::new(&cli.root);
-        for pattern in &cli.include {
+        for pattern in eff_include {
             ob.add(pattern)?;
         }
-        for pattern in &cli.exclude {
+        for pattern in eff_exclude {
             ob.add(&format!("!{}", pattern))?;
         }
         Some(ob.build()?)
@@ -514,8 +542,6 @@ fn apply_patterns(
     use directory::state::SelectionState;
     use globset::Glob;
 
-    let include_all = include.is_empty();
-
     let include_matchers: Vec<_> = include
         .iter()
         .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
@@ -524,6 +550,8 @@ fn apply_patterns(
         .iter()
         .filter_map(|p| Glob::new(p).ok().map(|g| g.compile_matcher()))
         .collect();
+
+    let has_includes = !include_matchers.is_empty();
 
     for i in 0..tree.nodes.len() {
         if let Some(node) = tree.nodes.get(i) {
@@ -536,33 +564,25 @@ fn apply_patterns(
                 node.path.to_string_lossy()
             };
 
-            let mut should_include = include_all;
+            let matches_include = include_matchers.iter().any(|m| {
+                m.is_match(relative_path.as_ref()) || m.is_match(&node.name)
+            });
+            let matches_exclude = exclude_matchers.iter().any(|m| {
+                m.is_match(relative_path.as_ref()) || m.is_match(&node.name)
+            });
 
-            for matcher in &include_matchers {
-                if matcher.is_match(relative_path.as_ref())
-                    || matcher.is_match(&node.name)
-                {
-                    should_include = true;
-                    break;
-                }
+            if has_includes {
+                // With include patterns: include matching files, then exclude overrides
+                let new_state = if matches_include && !matches_exclude {
+                    SelectionState::Included
+                } else {
+                    SelectionState::Excluded
+                };
+                tree.set_state(i, new_state);
+            } else if matches_exclude {
+                // Exclude-only: just force-exclude matching files, leave others as-is
+                tree.set_state(i, SelectionState::Excluded);
             }
-
-            for matcher in &exclude_matchers {
-                if matcher.is_match(relative_path.as_ref())
-                    || matcher.is_match(&node.name)
-                {
-                    should_include = false;
-                    break;
-                }
-            }
-
-            let new_state = if should_include {
-                SelectionState::Included
-            } else {
-                SelectionState::Excluded
-            };
-
-            tree.set_state(i, new_state);
         }
     }
 }

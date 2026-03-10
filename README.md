@@ -75,6 +75,7 @@ Options:
   -I, --include-all                Pre-include all files
   -i, --include <PATTERN>          Include glob pattern (repeatable)
   -e, --exclude <PATTERN>          Exclude glob pattern (repeatable)
+      --hide-pattern <PATTERN>     Hide files from tree entirely (repeatable)
   -p, --path <PATH>                Explicit file/directory paths (repeatable)
   -o, --output <PATH>              Write output to file
   -g, --respect-gitignore <BOOL>   Respect .gitignore [default: true]
@@ -90,9 +91,13 @@ Commands:
 
 ## Configuration
 
-A config file is auto-created at `~/.config/gthr.toml` on first run. Respects `XDG_CONFIG_HOME`.
+gthr supports both a global config and per-project local configs. A global config is auto-created at `~/.config/gthr.toml` on first run. Respects `XDG_CONFIG_HOME`.
 
-**Priority** (highest wins): CLI flags > config file > built-in defaults.
+To configure a specific project, create a `gthr.toml` in the project root directory (the `--root` directory, defaults to CWD).
+
+**Priority** (highest wins): CLI flags > local `gthr.toml` > global `~/.config/gthr.toml` > built-in defaults.
+
+For any field, local wins over global. If only one defines it, that value is used.
 
 ### Config options
 
@@ -104,6 +109,33 @@ A config file is auto-created at `~/.config/gthr.toml` on first run. Respects `X
 | `show_hidden` | `false` | Include dotfiles and dot-directories |
 | `extra_text_extensions` | `[]` | Extensions to always treat as text (e.g. `["mdx", "astro"]`) |
 | `exclude_text_extensions` | `[]` | Extensions to never treat as text (e.g. `["min.js", "log"]`) |
+| `include_patterns` | `[]` | Glob patterns to include files (e.g. `["src/**/*.rs", "*.toml"]`) |
+| `exclude_patterns` | `[]` | Glob patterns to exclude files (e.g. `["target/**", "*.log"]`) |
+| `hide_patterns` | `[]` | Glob patterns to remove from the tree (files won't appear in TUI or output) |
+
+### Include / exclude patterns
+
+Use `include_patterns` and `exclude_patterns` to pre-filter files in both interactive and direct modes. These use the same glob syntax as the `-i`/`-e` CLI flags.
+
+```toml
+# Local gthr.toml — only gather Rust and TOML files, skip build output
+include_patterns = ["*.rs", "*.toml"]
+exclude_patterns = ["target/**"]
+```
+
+When both include and exclude patterns are set, a file must match an include pattern **and** not match any exclude pattern to be selected. When only exclude patterns are set, matching files are excluded and everything else is left in its default state.
+
+If CLI `-i`/`-e` flags are provided, they fully replace the corresponding config patterns.
+
+### Hide patterns
+
+`hide_patterns` removes files from the tree. They won't appear in the TUI or direct mode output. Excluded files are still visible but deselected; hidden files are gone.
+
+```toml
+hide_patterns = ["target/**", "node_modules"]
+```
+
+Stacks with `show_hidden`: hides additional files, does not reveal hidden ones. CLI `--hide-pattern` flags fully replace config `hide_patterns`.
 
 ### Text file detection overrides
 
@@ -123,11 +155,7 @@ Extensions are case-insensitive and leading dots are stripped (`.RS`, `rs`, and 
 
 ## Limitations
 
-- **No regex in the TUI search bar** — fuzzy matching only. Glob patterns work in direct mode via `-i`/`-e`.
-- **Binary files are excluded from output** — only files detected as text are included. Use `extra_text_extensions` if something is missed.
-- **Clipboard may silently fail** — on headless systems or broken clipboard backends, output is lost. Use `-o` to be safe.
 - **Large directories** — scanning happens in a background thread with streaming updates, but very large trees (100k+ files) will take time to fully load in interactive mode.
-- **Config is global only** — no per-project config files. Use CLI flags for project-specific overrides.
 
 ## Examples
 
