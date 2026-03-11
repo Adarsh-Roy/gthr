@@ -30,6 +30,4 @@ arboard = { version = "3.4", default-features = false }
 ignore = "0.4"
 infer = "0.16"
 globset = "0.4"
-
-[dev-dependencies]
 tempfile = "3.22.0"

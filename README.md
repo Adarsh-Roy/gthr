@@ -34,11 +34,27 @@ gthr -I
 # Direct mode — include only Rust files, output immediately
 gthr -i "*.rs" direct
 
+# Exclude build artifacts
+gthr -I -e "target/*" -e "node_modules/*" direct
+
 # Include specific paths (files or directories)
 gthr -p src/lib.rs -p tests/ direct
 
 # Save to file instead of clipboard
 gthr -o output.md
+
+# Everything, including hidden files, ignoring .gitignore
+gthr -I -H true -g false
+
+# Clone a remote repo and browse in TUI
+gthr --url https://github.com/user/repo
+
+# Clone, gather Rust files, output directly
+gthr --url https://github.com/user/repo -i "*.rs" direct
+
+# Clone and keep the repo (CWD by default, or specify a directory)
+gthr --url https://github.com/user/repo --keep
+gthr --url https://github.com/user/repo --keep ~/projects
 ```
 
 ### Modes
@@ -61,17 +77,23 @@ gthr -o output.md
 | Export and quit | `Ctrl+E` |
 | Help | `Ctrl+H` |
 
+### Remote repositories
+
+`--url` shallow-clones any git URL (`--depth 1`) into a temp directory, cleaned up on exit. `--keep` persists the clone (CWD by default, or pass a path). Uses your local `git`, so SSH keys and credential helpers work for private repos.
+
 ### Output behavior
 
 - Copies to clipboard by default (up to `max_clipboard_size`).
 - If output exceeds the clipboard limit, prompts to save to a file.
-- Use `-o <path>` to write directly to a file.
+- `-o <path>` writes directly to a file.
 
 ## CLI reference
 
 ```
 Options:
   -r, --root <ROOT>                Root directory [default: .]
+      --url <URL>                  Git URL to clone and gather from
+      --keep [DIR]                 Keep cloned repo (default: CWD, requires --url)
   -I, --include-all                Pre-include all files
   -i, --include <PATTERN>          Include glob pattern (repeatable)
   -e, --exclude <PATTERN>          Exclude glob pattern (repeatable)
@@ -156,25 +178,6 @@ Extensions are case-insensitive and leading dots are stripped (`.RS`, `rs`, and 
 ## Limitations
 
 - **Large directories** — scanning happens in a background thread with streaming updates, but very large trees (100k+ files) will take time to fully load in interactive mode.
-
-## Examples
-
-```bash
-# Everything, including hidden files, ignoring .gitignore
-gthr -I -H true -g false
-
-# Only Rust and TOML files, direct output
-gthr -i "*.rs" -i "*.toml" direct
-
-# Exclude build artifacts
-gthr -I -e "target/*" -e "node_modules/*" direct
-
-# Include a specific file and a whole directory
-gthr -p src/lib.rs -p tests/ direct
-
-# Larger file size limit (5 MB)
-gthr --max-file-size 5242880
-```
 
 ## Contributing
 

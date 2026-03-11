@@ -3,6 +3,7 @@ pub mod config;
 pub mod constants;
 pub mod directory;
 pub mod fuzzy;
+pub mod git;
 pub mod output;
 pub mod ui;
 

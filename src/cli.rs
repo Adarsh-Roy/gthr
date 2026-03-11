@@ -11,8 +11,16 @@ pub struct Cli {
     pub command: Option<Commands>,
 
     /// Root directory to process
-    #[arg(short, long, default_value = ".")]
+    #[arg(short, long, default_value = ".", conflicts_with = "url")]
     pub root: PathBuf,
+
+    /// Git URL to clone and gather from
+    #[arg(long)]
+    pub url: Option<String>,
+
+    /// Keep cloned repo (optional path for parent directory, defaults to CWD)
+    #[arg(long, requires = "url", num_args = 0..=1, default_missing_value = ".")]
+    pub keep: Option<PathBuf>,
 
     /// Pre-include all files and directories
     #[arg(short = 'I', long = "include-all")]
@@ -64,6 +72,8 @@ impl Default for Cli {
         Self {
             command: Some(Commands::Interactive),
             root: PathBuf::from("."),
+            url: None,
+            keep: None,
             include_all: false,
             include: Vec::new(),
             exclude: Vec::new(),
