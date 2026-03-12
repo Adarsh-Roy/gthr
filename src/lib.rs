@@ -108,6 +108,10 @@ pub async fn run_interactive_mode(cli: &Cli, settings: &Settings) -> Result<()> 
     )?;
     terminal.show_cursor()?;
 
+    if let Some(msg) = &app.exit_message {
+        println!("{}", msg);
+    }
+
     result
 }
 
@@ -177,7 +181,8 @@ async fn run_app<B: Backend>(
                             AppAction::FileSaveBackspace => app.file_save_backspace(),
                             AppAction::FileSaveConfirm => {
                                 if let Some(content) = &app.pending_content.clone() {
-                                    save_file_from_dialog(&app, content)?;
+                                    let msg = save_file_from_dialog(&app, content)?;
+                                    app.exit_message = Some(msg);
                                     app.quit();
                                 }
                             }
@@ -510,22 +515,33 @@ fn apply_explicit_paths(
     paths: &[PathBuf],
 ) -> Vec<String> {
     let canonical_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let tree_root = tree.nodes[tree.root_index].path.clone();
     let mut warnings = Vec::new();
 
     for path_arg in paths {
-        let resolved = resolve_path(&canonical_root, path_arg);
-        let resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
+        // Validate using canonical paths
+        let canonical = resolve_path(&canonical_root, path_arg);
+        let canonical = std::fs::canonicalize(&canonical).unwrap_or(canonical);
 
-        if !resolved.exists() {
+        if !canonical.exists() {
             warnings.push(format!("path not found: {}", path_arg.display()));
             continue;
         }
-        if !resolved.starts_with(&canonical_root) {
+        if !canonical.starts_with(&canonical_root) {
             warnings.push(format!("path outside root: {}", path_arg.display()));
             continue;
         }
 
-        if let Some(&idx) = tree.path_to_index.get(&resolved) {
+        // Look up using the tree's root path format (may be relative like ".")
+        // For absolute paths, strip canonical root to get relative, then join with tree root
+        let tree_resolved = if let Ok(relative) = canonical.strip_prefix(&canonical_root) {
+            tree_root.join(relative)
+        } else {
+            resolve_path(&tree_root, path_arg)
+        };
+        if let Some(&idx) = tree.path_to_index.get(&tree_resolved) {
+            tree.set_state(idx, SelectionState::Included);
+        } else if let Some(&idx) = tree.path_to_index.get(&canonical) {
             tree.set_state(idx, SelectionState::Included);
         } else {
             warnings.push(format!("path not in tree: {}", path_arg.display()));
@@ -589,7 +605,7 @@ fn apply_patterns(
 }
 
 pub enum OutputAction {
-    Quit,
+    Quit(Option<String>),
     StartFileSave(String),
     Continue,
 }
@@ -606,22 +622,25 @@ pub fn handle_output(
     let content = formatter.format_output(tree)?;
 
     if content.trim().is_empty() {
-        println!("⚠ No content included. Please include at least one file.");
-        return Ok(OutputAction::Quit);
+        let msg = "⚠ No content included. Please include at least one file.".to_string();
+        if !is_interactive { println!("{}", msg); }
+        return Ok(OutputAction::Quit(Some(msg)));
     }
 
     if let Some(output_path) = &cli.output {
         let writer = OutputWriter::new().with_formatter(formatter);
         writer.write_to_file(tree, output_path)?;
-        println!("✓ Output written to: {}", output_path.display());
-        return Ok(OutputAction::Quit);
+        let msg = format!("✓ Output written to: {}", output_path.display());
+        if !is_interactive { println!("{}", msg); }
+        return Ok(OutputAction::Quit(Some(msg)));
     }
 
     if content.len() <= settings.max_clipboard_size {
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             if clipboard.set_text(&content).is_ok() {
-                println!("✓ Output copied to clipboard ({} bytes)", content.len());
-                return Ok(OutputAction::Quit);
+                let msg = format!("✓ Output copied to clipboard ({} bytes)", content.len());
+                if !is_interactive { println!("{}", msg); }
+                return Ok(OutputAction::Quit(Some(msg)));
             }
         }
     }
@@ -636,7 +655,10 @@ pub fn handle_output(
 
 pub fn handle_export(app: &mut App, cli: &Cli, settings: &Settings) -> Result<()> {
     match handle_output(&app.tree, cli, settings, true)? {
-        OutputAction::Quit => app.quit(),
+        OutputAction::Quit(msg) => {
+            app.exit_message = msg;
+            app.quit();
+        }
         OutputAction::StartFileSave(content) => app.start_file_save(content),
         OutputAction::Continue => {}
     }
@@ -688,7 +710,7 @@ pub fn save_file_with_text_prompt(
     Ok(())
 }
 
-pub fn save_file_from_dialog(app: &App, content: &str) -> Result<()> {
+pub fn save_file_from_dialog(app: &App, content: &str) -> Result<String> {
     use std::fs;
     use std::path::Path;
 
@@ -710,6 +732,5 @@ pub fn save_file_from_dialog(app: &App, content: &str) -> Result<()> {
     }
 
     fs::write(path, content)?;
-    println!("✓ Output saved to: {}", path.display());
-    Ok(())
+    Ok(format!("✓ Output saved to: {}", path.display()))
 }

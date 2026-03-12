@@ -39,6 +39,7 @@ pub struct App {
     pub scan_handle: Option<JoinHandle<()>>,
     pub initial_state: SelectionState,
     pub notification: Option<(String, Instant)>,
+    pub exit_message: Option<String>,
     last_filter_update: Option<Instant>,
 }
 
@@ -61,6 +62,7 @@ impl App {
             scan_handle: None,
             initial_state: SelectionState::Excluded,
             notification: None,
+            exit_message: None,
             last_filter_update: None,
         };
 
@@ -94,6 +96,7 @@ impl App {
             scan_handle: Some(handle),
             initial_state,
             notification: None,
+            exit_message: None,
             last_filter_update: None,
         }
     }

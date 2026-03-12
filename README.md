@@ -37,8 +37,11 @@ gthr -i "*.rs" direct
 # Exclude build artifacts
 gthr -I -e "target/*" -e "node_modules/*" direct
 
-# Include specific paths (files or directories)
+# Include specific paths (files or directories, relative or absolute)
 gthr -p src/lib.rs -p tests/ direct
+
+# Pre-select specific files in interactive mode
+gthr -p src/lib.rs -p src/cli.rs
 
 # Save to file instead of clipboard
 gthr -o output.md
@@ -61,7 +64,7 @@ gthr --url https://github.com/user/repo --keep ~/projects
 
 **Interactive** (default): Browse the file tree in a TUI, fuzzy-search, and toggle files before exporting.
 
-**Direct** (`gthr direct`): Applies `-i`/`-e`/`-p` flags and outputs without opening the TUI.
+**Direct** (`gthr direct`): Applies flags and outputs without opening the TUI.
 
 ### Interactive controls
 
